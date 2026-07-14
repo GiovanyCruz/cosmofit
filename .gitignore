@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Environments
+.venv/
+venv/
+
+# Tests and tools
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Packaging
+build/
+dist/
+*.spec
+
+# Application outputs
+outputs/*
+!outputs/.gitkeep
+chains/
+
+# IDE and macOS
+.vscode/
+.idea/
+.DS_Store
