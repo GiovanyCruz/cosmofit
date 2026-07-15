@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "cosmofit"
 version = "0.1.0"
 description = "Desktop interface for cosmological background inference with Cobaya"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "cobaya",
     "getdist",
@@ -36,7 +36,7 @@ pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

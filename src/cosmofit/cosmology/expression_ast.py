@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
 
 
 @dataclass(frozen=True)
@@ -45,7 +44,7 @@ class FunctionCallNode:
     arguments: tuple[ExpressionNode, ...]
 
 
-ExpressionNode: TypeAlias = (
+type ExpressionNode = (
     NumberNode
     | SymbolNode
     | UnaryOperationNode
