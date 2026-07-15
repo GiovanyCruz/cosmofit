@@ -5,11 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from cosmofit.application import RunConfig
+from cosmofit.application import (
+    CosmicChronometerDatasetConfig,
+    RunConfig,
+    SupernovaDatasetConfig,
+)
 
 LIKELIHOOD_CLASS_PATH = (
     "cosmofit.cobaya_engine.external_likelihood."
     "CosmicChronometersCobayaLikelihood"
+)
+THEORY_CLASS_PATH = (
+    "cosmofit.cobaya_engine.background_theory."
+    "GenericBackgroundTheory"
 )
 
 
@@ -28,7 +36,9 @@ def build_cobaya_input(run_config: RunConfig) -> CobayaInput:
     params_block: dict[str, dict[str, Any]] = {}
     sampled_symbols: list[str] = []
     fixed_values: dict[str, float] = {}
+    all_symbols: list[str] = []
     for parameter in run_config.parameters:
+        all_symbols.append(parameter.symbol)
         if parameter.role == "fixed":
             assert parameter.value is not None
             params_block[parameter.symbol] = {"value": parameter.value}
@@ -48,7 +58,7 @@ def build_cobaya_input(run_config: RunConfig) -> CobayaInput:
         }
         sampled_symbols.append(parameter.symbol)
 
-    likelihood_options = {
+    theory_options = {
         "model_expression": run_config.model.expression,
         "model_expression_unit": run_config.model.expression_unit,
         "model_redshift_symbol": run_config.model.redshift_symbol,
@@ -73,10 +83,22 @@ def build_cobaya_input(run_config: RunConfig) -> CobayaInput:
             }
             for parameter in run_config.parameters
         ],
-        "dataset_path": str(run_config.dataset.data_path),
-        "dataset_name": run_config.dataset.name,
-        "input_params": sampled_symbols,
+        "input_params": all_symbols,
     }
+    likelihood_block: dict[str, Any] = {}
+    for dataset in run_config.datasets:
+        if isinstance(dataset, CosmicChronometerDatasetConfig):
+            likelihood_block[LIKELIHOOD_CLASS_PATH] = {
+                "dataset_path": str(dataset.data_path),
+                "dataset_name": dataset.name,
+            }
+        elif isinstance(dataset, SupernovaDatasetConfig):
+            likelihood_block[dataset.kind] = {
+                "use_abs_mag": dataset.use_absolute_magnitude,
+            }
+        else:
+            raise AssertionError(f"Unsupported dataset type {type(dataset).__name__}.")
+
     sampler_options: dict[str, Any] = {
         "learn_proposal": run_config.sampler.learn_proposal,
     }
@@ -90,9 +112,10 @@ def build_cobaya_input(run_config: RunConfig) -> CobayaInput:
         sampler_options["Rminus1_cl_stop"] = run_config.sampler.Rminus1_cl_stop
 
     info = {
-        "likelihood": {
-            LIKELIHOOD_CLASS_PATH: likelihood_options,
+        "theory": {
+            THEORY_CLASS_PATH: theory_options,
         },
+        "likelihood": likelihood_block,
         "params": params_block,
         "sampler": {"mcmc": sampler_options},
     }

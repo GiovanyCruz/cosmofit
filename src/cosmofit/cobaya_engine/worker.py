@@ -18,6 +18,7 @@ from cosmofit.cobaya_engine.artifacts import (
     RunArtifacts,
     list_chain_files,
     write_status,
+    write_updated_cobaya_input,
 )
 
 
@@ -45,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
             force=run_config.runtime.overwrite,
             no_mpi=True,
         )
+        write_updated_cobaya_input(artifacts, updated_info)
         summary = _build_summary(
             updated_info=updated_info,
             sampler=sampler,
@@ -120,6 +122,7 @@ def _artifacts_from_run_directory(run_directory: Path) -> RunArtifacts:
         input_yaml_path=run_directory / "input.yaml",
         normalized_config_path=run_directory / "normalized_config.json",
         cobaya_input_path=run_directory / "cobaya_input.yaml",
+        updated_cobaya_input_path=run_directory / "updated_cobaya_input.yaml",
         summary_path=run_directory / "summary.json",
         status_path=run_directory / "status.json",
         metadata_path=run_directory / "metadata.json",

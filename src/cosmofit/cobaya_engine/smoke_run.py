@@ -65,10 +65,12 @@ def main(argv: list[str] | None = None) -> int:
                 proposal=0.02,
             ),
         ),
-        dataset=CosmicChronometerDatasetConfig(
-            kind="cosmic_chronometers",
-            data_path=_fixture_path(),
-            name="synthetic-cc",
+        datasets=(
+            CosmicChronometerDatasetConfig(
+                kind="cosmic_chronometers",
+                data_path=_fixture_path(),
+                name="synthetic-cc",
+            ),
         ),
         sampler=SamplerConfig(
             kind="cobaya_mcmc",

@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from cosmofit.application.config_models import (
     CosmicChronometerDatasetConfig,
+    DatasetConfig,
     ParameterConfig,
     RunConfig,
 )
@@ -28,10 +29,7 @@ def resolve_run_config(run_config: RunConfig) -> RunConfig:
 
     return replace(
         run_config,
-        dataset=replace(
-            run_config.dataset,
-            data_path=run_config.dataset.data_path.resolve(),
-        ),
+        datasets=tuple(_resolve_dataset(dataset) for dataset in run_config.datasets),
         runtime=replace(
             run_config.runtime,
             output_directory=run_config.runtime.output_directory.resolve(),
@@ -62,6 +60,12 @@ def build_cosmic_chronometers_likelihood(
         name=dataset_config.name,
     )
     return CosmicChronometersLikelihood(dataset)
+
+
+def _resolve_dataset(dataset: DatasetConfig) -> DatasetConfig:
+    if isinstance(dataset, CosmicChronometerDatasetConfig):
+        return replace(dataset, data_path=dataset.data_path.resolve())
+    return dataset
 
 
 def _build_domain_parameter(

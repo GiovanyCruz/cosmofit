@@ -13,6 +13,7 @@ from cosmofit.application import (
     RunConfig,
     RuntimeConfig,
     SamplerConfig,
+    SupernovaDatasetConfig,
     UniformPriorConfig,
     deserialize_run_config,
     serialize_run_config,
@@ -39,6 +40,26 @@ def test_run_config_round_trips_through_serialization() -> None:
     assert restored == run_config
 
 
+def test_run_config_supports_mixed_dataset_selection() -> None:
+    run_config = _example_run_config()
+
+    assert run_config.datasets == (
+        CosmicChronometerDatasetConfig(
+            kind="cosmic_chronometers",
+            data_path=Path("tests/fixtures/cosmic_chronometers_synth.csv"),
+        ),
+        SupernovaDatasetConfig(kind="sn.pantheonplus"),
+    )
+
+
+def test_supernova_absolute_magnitude_mode_requires_future_contract() -> None:
+    with pytest.raises(ParameterDefinitionError, match="Mb parameter contract"):
+        SupernovaDatasetConfig(
+            kind="sn.pantheonplus",
+            use_absolute_magnitude=True,
+        )
+
+
 def _example_run_config() -> RunConfig:
     return RunConfig(
         schema_version=1,
@@ -63,9 +84,12 @@ def _example_run_config() -> RunConfig:
                 value=0.3,
             ),
         ),
-        dataset=CosmicChronometerDatasetConfig(
-            kind="cosmic_chronometers",
-            data_path=Path("tests/fixtures/cosmic_chronometers_synth.csv"),
+        datasets=(
+            CosmicChronometerDatasetConfig(
+                kind="cosmic_chronometers",
+                data_path=Path("tests/fixtures/cosmic_chronometers_synth.csv"),
+            ),
+            SupernovaDatasetConfig(kind="sn.pantheonplus"),
         ),
         sampler=SamplerConfig(kind="cobaya_mcmc", seed=1234, max_samples=10),
         runtime=RuntimeConfig(

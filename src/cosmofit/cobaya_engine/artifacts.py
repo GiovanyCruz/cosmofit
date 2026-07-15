@@ -8,11 +8,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import cobaya
 import numpy as np
 import yaml
+from cobaya.likelihoods.base_classes.sn import SN
+from cobaya.tools import resolve_packages_path
 
 import cosmofit
-from cosmofit.application import RunConfig, serialize_run_config
+from cosmofit.application import RunConfig, SupernovaDatasetConfig, serialize_run_config
 
 
 @dataclass(frozen=True)
@@ -25,6 +28,7 @@ class RunArtifacts:
     input_yaml_path: Path
     normalized_config_path: Path
     cobaya_input_path: Path
+    updated_cobaya_input_path: Path
     summary_path: Path
     status_path: Path
     metadata_path: Path
@@ -59,6 +63,7 @@ def prepare_run_artifacts(run_config: RunConfig) -> RunArtifacts:
         input_yaml_path=run_directory / "input.yaml",
         normalized_config_path=run_directory / "normalized_config.json",
         cobaya_input_path=run_directory / "cobaya_input.yaml",
+        updated_cobaya_input_path=run_directory / "updated_cobaya_input.yaml",
         summary_path=run_directory / "summary.json",
         status_path=run_directory / "status.json",
         metadata_path=run_directory / "metadata.json",
@@ -114,15 +119,47 @@ def write_status(
         handle.write("\n")
 
 
-def write_metadata(artifacts: RunArtifacts) -> None:
+def write_updated_cobaya_input(
+    artifacts: RunArtifacts,
+    updated_cobaya_input: dict[str, Any],
+) -> None:
+    """Persist the Cobaya-resolved input dictionary returned by the worker run."""
+
+    with artifacts.updated_cobaya_input_path.open("w", encoding="utf-8") as handle:
+        yaml.safe_dump(
+            _serialize_yaml_value(updated_cobaya_input),
+            handle,
+            sort_keys=False,
+        )
+
+
+def write_metadata(artifacts: RunArtifacts, run_config: RunConfig) -> None:
     """Persist environment metadata needed for debugging and reproducibility."""
 
+    packages_path = resolve_packages_path()
     payload = {
+        "cobaya_version": getattr(cobaya, "__version__", "unknown"),
+        "cobaya_packages_path": packages_path,
         "cosmofit_version": getattr(cosmofit, "__version__", "0.1.0"),
         "numpy_version": np.__version__,
         "python_version": platform.python_version(),
         "platform": platform.platform(),
     }
+    supernova_datasets = [
+        dataset.kind
+        for dataset in run_config.datasets
+        if isinstance(dataset, SupernovaDatasetConfig)
+    ]
+    if supernova_datasets:
+        payload["supernova_components"] = supernova_datasets
+    if supernova_datasets and packages_path:
+        sn_data_path = SN.get_path(packages_path)
+        payload["sn_data_path"] = sn_data_path
+        version_path = Path(sn_data_path) / "version.dat"
+        if version_path.is_file():
+            payload["sn_data_version"] = version_path.read_text(
+                encoding="utf-8"
+            ).strip()
     with artifacts.metadata_path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, sort_keys=True)
         handle.write("\n")
@@ -136,3 +173,19 @@ def list_chain_files(artifacts: RunArtifacts) -> list[str]:
         for path in artifacts.chains_directory.glob("*")
         if path.is_file()
     )
+
+
+def _serialize_yaml_value(value: Any) -> Any:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, dict):
+        return {key: _serialize_yaml_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_serialize_yaml_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_serialize_yaml_value(item) for item in value]
+    return value

@@ -53,9 +53,11 @@ def _run_config(run_directory: Path, *, overwrite: bool) -> RunConfig:
                 proposal=1.0,
             ),
         ),
-        dataset=CosmicChronometerDatasetConfig(
-            kind="cosmic_chronometers",
-            data_path=Path("tests/fixtures/cosmic_chronometers_synth.csv"),
+        datasets=(
+            CosmicChronometerDatasetConfig(
+                kind="cosmic_chronometers",
+                data_path=Path("tests/fixtures/cosmic_chronometers_synth.csv"),
+            ),
         ),
         sampler=SamplerConfig(kind="cobaya_mcmc", seed=7),
         runtime=RuntimeConfig(

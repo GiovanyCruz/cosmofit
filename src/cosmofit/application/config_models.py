@@ -3,11 +3,25 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from math import isfinite
 from pathlib import Path
 from typing import Any, Literal
 
 from cosmofit.cosmology import ALLOWED_FUNCTIONS
 from cosmofit.cosmology.validators import ParameterDefinitionError
+
+SUPPORTED_SUPERNOVA_DATASETS = (
+    "sn.pantheonplus",
+    "sn.pantheonplusshoes",
+    "sn.union3",
+)
+
+
+def _validate_finite_real(value: float | None, *, field_name: str) -> None:
+    if value is None:
+        return
+    if not isfinite(value):
+        raise ParameterDefinitionError(f"{field_name} must be a finite real number.")
 
 
 @dataclass(frozen=True)
@@ -18,6 +32,8 @@ class UniformPriorConfig:
     maximum: float
 
     def __post_init__(self) -> None:
+        _validate_finite_real(self.minimum, field_name="Uniform prior minimum")
+        _validate_finite_real(self.maximum, field_name="Uniform prior maximum")
         if self.minimum >= self.maximum:
             raise ParameterDefinitionError(
                 "Uniform prior minimum must be smaller than maximum."
@@ -51,6 +67,14 @@ class ParameterConfig:
                 f"Parameter symbol '{self.symbol}' conflicts with an allowed function."
             )
 
+        _validate_finite_real(self.value, field_name=f"Value for '{self.name}'")
+        _validate_finite_real(
+            self.reference, field_name=f"Reference value for '{self.name}'"
+        )
+        _validate_finite_real(
+            self.proposal, field_name=f"Proposal width for '{self.name}'"
+        )
+
         if self.role == "fixed":
             if self.value is None:
                 raise ParameterDefinitionError(
@@ -83,7 +107,7 @@ class ParameterConfig:
 
 @dataclass(frozen=True)
 class ModelConfig:
-    """Validated H(z) model configuration for milestone 1."""
+    """Validated H(z) model configuration for flat-background runs."""
 
     kind: Literal["hz_expression_flat"]
     expression: str
@@ -108,7 +132,7 @@ class ModelConfig:
 
 @dataclass(frozen=True)
 class CosmicChronometerDatasetConfig:
-    """Dataset selection for the milestone-1 cosmic chronometer likelihood."""
+    """Dataset selection for the cosmic chronometer likelihood."""
 
     kind: Literal["cosmic_chronometers"]
     data_path: Path
@@ -117,8 +141,30 @@ class CosmicChronometerDatasetConfig:
     def __post_init__(self) -> None:
         if self.kind != "cosmic_chronometers":
             raise ParameterDefinitionError(
-                "Milestone 1 supports only kind='cosmic_chronometers'."
+                "Dataset kind must be 'cosmic_chronometers'."
             )
+
+
+@dataclass(frozen=True)
+class SupernovaDatasetConfig:
+    """Dataset selection for installed internal Cobaya SN likelihoods."""
+
+    kind: Literal["sn.pantheonplus", "sn.pantheonplusshoes", "sn.union3"]
+    use_absolute_magnitude: bool = False
+
+    def __post_init__(self) -> None:
+        if self.kind not in SUPPORTED_SUPERNOVA_DATASETS:
+            raise ParameterDefinitionError(
+                "Unsupported supernova dataset component name."
+            )
+        if self.use_absolute_magnitude:
+            raise ParameterDefinitionError(
+                "use_absolute_magnitude=True is not supported yet because "
+                "CosmoFit does not expose an explicit Mb parameter contract."
+            )
+
+
+DatasetConfig = CosmicChronometerDatasetConfig | SupernovaDatasetConfig
 
 
 @dataclass(frozen=True)
@@ -172,7 +218,7 @@ class RunConfig:
     schema_version: int
     model: ModelConfig
     parameters: tuple[ParameterConfig, ...]
-    dataset: CosmicChronometerDatasetConfig
+    datasets: tuple[DatasetConfig, ...]
     sampler: SamplerConfig
     runtime: RuntimeConfig
 
@@ -183,6 +229,8 @@ class RunConfig:
             raise ParameterDefinitionError(
                 "At least one cosmological parameter is required."
             )
+        if not self.datasets:
+            raise ParameterDefinitionError("At least one dataset must be selected.")
 
         names = [parameter.name for parameter in self.parameters]
         symbols = [parameter.symbol for parameter in self.parameters]
@@ -190,6 +238,10 @@ class RunConfig:
             raise ParameterDefinitionError("Parameter names must be unique.")
         if len(symbols) != len(set(symbols)):
             raise ParameterDefinitionError("Parameter symbols must be unique.")
+
+        dataset_kinds = [dataset.kind for dataset in self.datasets]
+        if len(dataset_kinds) != len(set(dataset_kinds)):
+            raise ParameterDefinitionError("Dataset selections must be unique.")
 
 
 def serialize_run_config(run_config: RunConfig) -> dict[str, Any]:
@@ -231,11 +283,7 @@ def deserialize_run_config(data: dict[str, Any]) -> RunConfig:
             allowed_functions=tuple(data["model"]["allowed_functions"]),
         ),
         parameters=parameters,
-        dataset=CosmicChronometerDatasetConfig(
-            kind=data["dataset"]["kind"],
-            data_path=Path(data["dataset"]["data_path"]),
-            name=data["dataset"]["name"],
-        ),
+        datasets=tuple(_deserialize_dataset(item) for item in data["datasets"]),
         sampler=SamplerConfig(
             kind=data["sampler"]["kind"],
             seed=data["sampler"]["seed"],
@@ -251,6 +299,22 @@ def deserialize_run_config(data: dict[str, Any]) -> RunConfig:
             overwrite=data["runtime"]["overwrite"],
         ),
     )
+
+
+def _deserialize_dataset(data: dict[str, Any]) -> DatasetConfig:
+    kind = data["kind"]
+    if kind == "cosmic_chronometers":
+        return CosmicChronometerDatasetConfig(
+            kind=kind,
+            data_path=Path(data["data_path"]),
+            name=data["name"],
+        )
+    if kind in SUPPORTED_SUPERNOVA_DATASETS:
+        return SupernovaDatasetConfig(
+            kind=kind,
+            use_absolute_magnitude=data.get("use_absolute_magnitude", False),
+        )
+    raise ParameterDefinitionError(f"Unsupported dataset kind '{kind}'.")
 
 
 def _serialize_value(value: Any) -> Any:

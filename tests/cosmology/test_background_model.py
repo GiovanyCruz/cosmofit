@@ -125,7 +125,7 @@ def test_model_rejects_missing_or_unknown_parameter_values() -> None:
 def test_model_rejects_non_finite_parameter_values() -> None:
     model = BackgroundModel(expression="H0*(1+z)", parameters=_example_parameters())
 
-    with pytest.raises(ExpressionValidationError, match="finite real scalar"):
+    with pytest.raises(ParameterDefinitionError, match="finite real scalar"):
         model.hz(0.5, {"H0": np.inf, "Om": 0.3})
 
 

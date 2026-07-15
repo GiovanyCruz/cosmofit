@@ -37,7 +37,7 @@ def run_in_subprocess(run_config: RunConfig) -> RunResult:
     write_input_yaml(artifacts, resolved_config)
     write_normalized_config(artifacts, resolved_config)
     write_cobaya_input(artifacts, cobaya_input.info)
-    write_metadata(artifacts)
+    write_metadata(artifacts, resolved_config)
     write_status(artifacts, state="pending")
 
     with (

@@ -2,7 +2,9 @@
 
 from cosmofit.cosmology.expression_parser import ALLOWED_FUNCTIONS
 from cosmofit.cosmology.models import (
+    SPEED_OF_LIGHT_KM_PER_S,
     BackgroundModel,
+    BoundBackgroundModel,
     CosmologicalParameter,
     FixedParameter,
     Parameter,
@@ -22,6 +24,7 @@ from cosmofit.cosmology.validators import (
 __all__ = [
     "ALLOWED_FUNCTIONS",
     "BackgroundModel",
+    "BoundBackgroundModel",
     "CosmologicalParameter",
     "CosmologyValidationError",
     "ExpressionValidationError",
@@ -33,6 +36,7 @@ __all__ = [
     "PriorBounds",
     "ProposalWidth",
     "ReferenceValue",
+    "SPEED_OF_LIGHT_KM_PER_S",
     "SampledParameter",
     "flat_lcdm_example",
 ]

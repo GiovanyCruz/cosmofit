@@ -20,7 +20,9 @@ def test_smoke_run_creates_artifacts_and_succeeds(tmp_path: Path) -> None:
     assert (run_directory / "input.yaml").is_file()
     assert (run_directory / "normalized_config.json").is_file()
     assert (run_directory / "cobaya_input.yaml").is_file()
+    assert (run_directory / "updated_cobaya_input.yaml").is_file()
     assert (run_directory / "summary.json").is_file()
+    assert list(run_directory.rglob("*.py")) == []
 
     with (run_directory / "status.json").open(encoding="utf-8") as handle:
         status = json.load(handle)

@@ -11,6 +11,7 @@ from cosmofit.application import (
     RunConfig,
     RuntimeConfig,
     SamplerConfig,
+    SupernovaDatasetConfig,
     UniformPriorConfig,
 )
 from cosmofit.cobaya_engine.config_builder import build_cobaya_input
@@ -31,6 +32,18 @@ def test_fixed_parameter_translation_uses_value_block() -> None:
     cobaya_input = build_cobaya_input(_run_config())
 
     assert cobaya_input.info["params"]["Om"] == {"value": 0.3}
+
+
+def test_generated_configuration_contains_shared_theory_and_supported_supernovae(
+) -> None:
+    cobaya_input = build_cobaya_input(_run_config())
+
+    assert (
+        "cosmofit.cobaya_engine.background_theory.GenericBackgroundTheory"
+        in cobaya_input.info["theory"]
+    )
+    assert "sn.pantheonplus" in cobaya_input.info["likelihood"]
+    assert cobaya_input.info["likelihood"]["sn.pantheonplus"] == {"use_abs_mag": False}
 
 
 def test_generated_configuration_contains_no_pyside6_dependency() -> None:
@@ -58,10 +71,13 @@ def _run_config() -> RunConfig:
             ),
             ParameterConfig(name="Om", symbol="Om", role="fixed", value=0.3),
         ),
-        dataset=CosmicChronometerDatasetConfig(
-            kind="cosmic_chronometers",
-            data_path=Path("tests/fixtures/cosmic_chronometers_synth.csv"),
-            name="synthetic-cc",
+        datasets=(
+            CosmicChronometerDatasetConfig(
+                kind="cosmic_chronometers",
+                data_path=Path("tests/fixtures/cosmic_chronometers_synth.csv"),
+                name="synthetic-cc",
+            ),
+            SupernovaDatasetConfig(kind="sn.pantheonplus"),
         ),
         sampler=SamplerConfig(kind="cobaya_mcmc", seed=9, max_samples=10),
         runtime=RuntimeConfig(
