@@ -24,6 +24,24 @@ def test_only_ui_imports_pyside6() -> None:
     assert offending_files == []
 
 
+def test_only_analysis_imports_getdist() -> None:
+    offending_files = _find_offending_imports(
+        "getdist",
+        allowed_root=Path("src/cosmofit/analysis"),
+    )
+
+    assert offending_files == []
+
+
+def test_only_analysis_imports_matplotlib() -> None:
+    offending_files = _find_offending_imports(
+        "matplotlib",
+        allowed_root=Path("src/cosmofit/analysis"),
+    )
+
+    assert offending_files == []
+
+
 def _find_offending_imports(module_name: str, *, allowed_root: Path) -> list[str]:
     offenders: list[str] = []
     for path in Path("src/cosmofit").rglob("*.py"):
