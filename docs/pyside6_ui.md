@@ -28,6 +28,29 @@ The window contains five tabs:
 - `Sampler`
 - `Results`
 
+## Window sizing
+
+The main desktop window now uses these practical size targets:
+
+- initial size: `1200x800`
+- minimum practical size: `800x600`
+
+Responsive behavior is implemented in the tab content instead of relying on a
+large main-window minimum:
+
+- the `Model`, `Datasets`, and `Sampler` pages live inside `QScrollArea`
+  containers with `widgetResizable=True`;
+- the `Parameters` and posterior summary tables use interactive headers and
+  horizontal scrollbars instead of stretching every column to the window width;
+- the `Results` page uses responsive action grids, scrollable metadata content,
+  a scrollable content area, a resizable splitter layout, and a scaled PNG
+  preview that preserves the original export files;
+- Results action buttons keep their natural height after a plot preview loads;
+- the plot metadata pane wraps long paths and scrolls instead of forcing the
+  preview or action rows to collapse;
+- the preview shrinks with `KeepAspectRatio` before the action area loses
+  usable height.
+
 The `Results` tab is an inactive placeholder for the next milestone.
 
 Validation is performed by building the existing application
@@ -37,7 +60,7 @@ execution, and does not import GetDist directly.
 
 ## LCDM example
 
-Use `Cargar ejemplo LCDM` to populate the form with the predefined
+Use `Load LCDM example` to populate the form with the predefined
 flat LCDM example:
 
 - `H(z) = H0*sqrt(Om*(1+z)**3 + 1-Om)`
@@ -67,7 +90,8 @@ It does not store generated chains or other run artifacts.
 
 - The UI validates configuration only; it does not start or stop Cobaya.
 - There is no progress monitoring or background execution yet.
-- Results loading, GetDist plots, and summary tables are not implemented.
+- Results loading, GetDist plots, and summary tables are not implemented in
+  this milestone snapshot.
 - `use_abs_mag` remains fixed to `false`.
 - The current chronometer example points to the repository fixture CSV.
 

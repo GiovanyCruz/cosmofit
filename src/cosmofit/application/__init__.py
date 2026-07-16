@@ -1,5 +1,9 @@
 """Application-layer configuration models and builders for CosmoFit."""
 
+from __future__ import annotations
+
+from importlib import import_module
+
 from cosmofit.application.config_models import (
     SUPPORTED_SUPERNOVA_DATASETS,
     CosmicChronometerDatasetConfig,
@@ -43,9 +47,15 @@ __all__ = [
     "ModelConfig",
     "ParameterConfig",
     "PreparedRunExecution",
+    "PlotKind",
+    "PosteriorPlotArtifact",
+    "PosteriorPlotRequest",
+    "PosteriorResultsLoadOptions",
+    "PosteriorResultsService",
     "RunConfig",
     "RuntimeConfig",
     "SamplerConfig",
+    "SummaryExportArtifact",
     "SupernovaDatasetConfig",
     "SUPPORTED_SUPERNOVA_DATASETS",
     "UniformPriorConfig",
@@ -58,8 +68,33 @@ __all__ = [
     "deserialize_run_config",
     "get_cobaya_packages_path",
     "load_worker_request",
+    "LoadedPosteriorResults",
+    "MathTextPreview",
+    "MathTextService",
     "prepare_worker_request",
     "resolve_run_config",
     "serialize_run_config",
     "validate_run_config_for_execution",
 ]
+
+
+def __getattr__(name: str) -> object:
+    if name in {
+        "LoadedPosteriorResults",
+        "MathTextPreview",
+        "MathTextService",
+        "PlotKind",
+        "PosteriorPlotArtifact",
+        "PosteriorPlotRequest",
+        "PosteriorResultsLoadOptions",
+        "SummaryExportArtifact",
+    }:
+        if name in {"MathTextPreview", "MathTextService"}:
+            module = import_module("cosmofit.application.mathtext_service")
+        else:
+            module = import_module("cosmofit.application.posterior_results_models")
+        return getattr(module, name)
+    if name == "PosteriorResultsService":
+        module = import_module("cosmofit.application.posterior_results_service")
+        return getattr(module, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

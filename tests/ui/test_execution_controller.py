@@ -195,7 +195,7 @@ def test_execution_controller_handles_malformed_status(
     _spin_until(lambda: bool(failures), app)
 
     assert controller.execution_state().state == STATE_FAILED
-    assert "invalida" in failures[0].lower()
+    assert "invalid" in failures[0].lower()
 
 
 def test_terminal_event_does_not_unlock_before_process_exit(

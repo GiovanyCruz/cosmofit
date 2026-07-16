@@ -14,7 +14,7 @@ from cosmofit.analysis.errors import (
     MultipleChainRootsError,
     RunNotSuccessfulError,
 )
-from cosmofit.application import RunConfig, deserialize_run_config
+from cosmofit.application.config_models import RunConfig, deserialize_run_config
 
 _MANAGED_CHAIN_PREFIX = "chain"
 

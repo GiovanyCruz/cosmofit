@@ -86,7 +86,7 @@ worker does not stop.
 
 - the controller updates the UI to `Cancelling` before signalling the
   process;
-- the Cancel button is disabled immediately after the first request;
+- `Cancel run` is disabled immediately after the first request;
 - no blocking `waitForFinished`, `waitForStarted`, or
   `waitForReadyRead` call is used from the GUI thread.
 
@@ -119,7 +119,7 @@ After a successful run, the Results tab stores and shows:
 
 - run label;
 - completion state;
-- final output directory;
+- final run directory;
 - selected datasets;
 - sampled parameter names.
 

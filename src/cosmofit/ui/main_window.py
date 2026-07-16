@@ -8,8 +8,8 @@ from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QFileDialog,
+    QGridLayout,
     QGroupBox,
-    QHBoxLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -44,6 +44,9 @@ from cosmofit.ui.validation_presenter import ValidationFeedback, ValidationPrese
 class MainWindow(QMainWindow):
     """Usable desktop window for defining and validating a run configuration."""
 
+    INITIAL_WINDOW_SIZE = (1200, 800)
+    MINIMUM_PRACTICAL_WINDOW_SIZE = (800, 600)
+
     def __init__(
         self,
         *,
@@ -63,7 +66,8 @@ class MainWindow(QMainWindow):
         self._close_after_cancel = False
 
         self.setWindowTitle("CosmoFit")
-        self.resize(1200, 760)
+        self.resize(*self.INITIAL_WINDOW_SIZE)
+        self.setMinimumSize(*self.MINIMUM_PRACTICAL_WINDOW_SIZE)
 
         self.model_widget = ModelWidget()
         self.parameter_table = ParameterTableWidget()
@@ -71,19 +75,19 @@ class MainWindow(QMainWindow):
         self.sampler_widget = SamplerWidget()
         self.results_widget = ResultsWidget()
 
-        self.validate_configuration_button = QPushButton("Validar configuracion")
+        self.validate_configuration_button = QPushButton("Validate configuration")
         self.run_fit_button = QPushButton("Run fit")
         self.cancel_run_button = QPushButton("Cancel run")
         self.cancel_run_button.setEnabled(False)
-        self.save_project_button = QPushButton("Guardar proyecto")
-        self.open_project_button = QPushButton("Abrir proyecto")
-        self.reset_form_button = QPushButton("Restablecer formulario")
-        self.load_lcdm_button = QPushButton("Cargar ejemplo LCDM")
+        self.save_project_button = QPushButton("Save project")
+        self.open_project_button = QPushButton("Open project")
+        self.reset_form_button = QPushButton("Reset form")
+        self.load_lcdm_button = QPushButton("Load LCDM example")
 
-        self.validation_summary_label = QLabel("Sin validar.")
+        self.validation_summary_label = QLabel("Not validated.")
         self.validation_summary_label.setWordWrap(True)
         self.details_toggle_button = QToolButton()
-        self.details_toggle_button.setText("Mostrar detalles tecnicos")
+        self.details_toggle_button.setText("Show technical details")
         self.details_toggle_button.setCheckable(True)
         self.details_toggle_button.setChecked(False)
         self.details_text = QTextEdit()
@@ -98,8 +102,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.results_widget, "Results")
         self.tabs.setTabEnabled(self.tabs.indexOf(self.results_widget), False)
 
-        button_layout = QHBoxLayout()
-        for button in (
+        button_layout = QGridLayout()
+        top_buttons = (
             self.validate_configuration_button,
             self.run_fit_button,
             self.cancel_run_button,
@@ -107,15 +111,17 @@ class MainWindow(QMainWindow):
             self.open_project_button,
             self.reset_form_button,
             self.load_lcdm_button,
-        ):
-            button_layout.addWidget(button)
-        button_layout.addStretch(1)
+        )
+        for index, button in enumerate(top_buttons):
+            button_layout.addWidget(button, index // 4, index % 4)
+        button_layout.setColumnStretch(3, 1)
 
-        validation_group = QGroupBox("Validacion")
+        validation_group = QGroupBox("Validation")
         validation_layout = QVBoxLayout(validation_group)
         validation_layout.addWidget(self.validation_summary_label)
         validation_layout.addWidget(self.details_toggle_button)
         validation_layout.addWidget(self.details_text)
+        self.details_text.setMinimumHeight(0)
 
         central_widget = QWidget()
         central_layout = QVBoxLayout(central_widget)
@@ -145,6 +151,9 @@ class MainWindow(QMainWindow):
             self._handle_final_run_directory
         )
         self.execution_controller.request_rejected.connect(self._handle_request_rejected)
+        self.results_widget.results_controller.results_loaded.connect(
+            self._handle_results_run_loaded
+        )
 
         self.reset_form()
         self.datasets_widget.set_packages_path(self.controller.cobaya_packages_path())
@@ -170,7 +179,7 @@ class MainWindow(QMainWindow):
         except Exception as error:
             feedback = self.validation_presenter.present_error(
                 error,
-                fallback="No se pudo validar el modelo H(z).",
+                fallback="Configuration validation failed.",
             )
             self.model_widget.set_validation_message(feedback.summary)
             self._apply_feedback(feedback)
@@ -189,7 +198,7 @@ class MainWindow(QMainWindow):
         except Exception as error:
             feedback = self.validation_presenter.present_error(
                 error,
-                fallback="No se pudo validar la configuracion.",
+                fallback="Configuration validation failed.",
             )
             self._apply_feedback(feedback)
             self._set_ui_state(STATE_IDLE)
@@ -206,7 +215,7 @@ class MainWindow(QMainWindow):
         except Exception as error:
             feedback = self.validation_presenter.present_error(
                 error,
-                fallback="No se pudo iniciar la ejecucion.",
+                fallback="Could not start the execution.",
             )
             self._apply_feedback(feedback)
             self._set_ui_state(STATE_IDLE)
@@ -216,13 +225,14 @@ class MainWindow(QMainWindow):
         self.current_output_root = result.run_config.runtime.output_directory.resolve()
         self.current_run_directory = None
         self.results_widget.clear_log()
+        self.results_widget.reset_loaded_results()
         self.results_widget.set_output_directory(None)
         self.tabs.setTabEnabled(self.tabs.indexOf(self.results_widget), True)
         self.tabs.setCurrentWidget(self.results_widget)
         if self.execution_controller.start_run(result.run_config):
             self._apply_feedback(
                 self.validation_presenter.present_success(
-                    "Configuracion validada. Iniciando la ejecucion."
+                    "Configuration is valid. Starting execution."
                 )
             )
         else:
@@ -230,12 +240,12 @@ class MainWindow(QMainWindow):
 
     def cancel_run(self) -> None:
         if self.execution_controller.cancel_run():
-            self.statusBar().showMessage("Solicitando cancelacion...", 5000)
+            self.statusBar().showMessage("Requesting cancellation...", 5000)
 
     def save_project(self) -> None:
         path, _selected_filter = QFileDialog.getSaveFileName(
             self,
-            "Guardar proyecto",
+            "Save project",
             str(self.current_project_path or Path("cosmofit_project.json")),
             "JSON (*.json)",
         )
@@ -246,21 +256,21 @@ class MainWindow(QMainWindow):
         except Exception as error:
             feedback = self.validation_presenter.present_error(
                 error,
-                fallback="No se pudo guardar el proyecto.",
+                fallback="Could not save the project.",
             )
             self._apply_feedback(feedback)
             return
 
         self.current_project_path = Path(path)
         feedback = self.validation_presenter.present_success(
-            f"Proyecto guardado en {self.current_project_path}."
+            f"Project saved to {self.current_project_path}."
         )
         self._apply_feedback(feedback)
 
     def open_project(self) -> None:
         path, _selected_filter = QFileDialog.getOpenFileName(
             self,
-            "Abrir proyecto",
+            "Open project",
             str(self.current_project_path or Path(".")),
             "JSON (*.json)",
         )
@@ -271,15 +281,19 @@ class MainWindow(QMainWindow):
         except Exception as error:
             feedback = self.validation_presenter.present_error(
                 error,
-                fallback="No se pudo abrir el proyecto.",
+                fallback="Could not open the project.",
             )
             self._apply_feedback(feedback)
             return
 
         self.current_project_path = Path(path)
         self.apply_state(state)
+        self.current_run_directory = None
+        self.results_widget.reset_loaded_results()
+        self.results_widget.set_latest_completed_run(None)
+        self.results_widget.set_output_directory(None)
         feedback = self.validation_presenter.present_success(
-            f"Proyecto cargado desde {self.current_project_path}."
+            f"Project loaded from {self.current_project_path}."
         )
         self._apply_feedback(feedback)
 
@@ -291,17 +305,20 @@ class MainWindow(QMainWindow):
         self.datasets_widget.set_conflict_message("")
         self._apply_feedback(
             self.validation_presenter.present_success(
-                "Formulario restablecido."
+                "Form reset."
             )
         )
+        self.current_run_directory = None
         self.results_widget.set_execution_state(STATE_IDLE)
+        self.results_widget.reset_loaded_results()
+        self.results_widget.set_latest_completed_run(None)
         self.results_widget.set_output_directory(None)
 
     def load_lcdm_example(self) -> None:
         state = self.controller.lcdm_example_state()
         self.apply_state(state)
         feedback = self.validation_presenter.present_success(
-            "Se cargo el ejemplo LCDM predefinido."
+            "Loaded the predefined LCDM example."
         )
         self._apply_feedback(feedback)
 
@@ -317,7 +334,7 @@ class MainWindow(QMainWindow):
             self._apply_feedback(
                 self.validation_presenter.present_error(
                     ValueError("No output directory is available."),
-                    fallback="No hay una carpeta de salida disponible.",
+                    fallback="No output folder is available.",
                 )
             )
             return
@@ -325,7 +342,7 @@ class MainWindow(QMainWindow):
             self._apply_feedback(
                 self.validation_presenter.present_error(
                     FileNotFoundError(str(self.current_run_directory)),
-                    fallback="La carpeta de salida no existe.",
+                    fallback="The output folder does not exist.",
                 )
             )
             return
@@ -340,7 +357,7 @@ class MainWindow(QMainWindow):
                         ValueError(
                             "Run directory is outside the configured output root."
                         ),
-                        fallback="La carpeta final esta fuera de la ruta configurada.",
+                        fallback="The final folder is outside the configured path.",
                     )
                 )
                 return
@@ -353,10 +370,10 @@ class MainWindow(QMainWindow):
 
         answer = QMessageBox.question(
             self,
-            "Cerrar CosmoFit",
+            "Close CosmoFit",
             (
-                "Hay una ejecucion activa. "
-                "Quieres cancelarla y cerrar la aplicacion?"
+                "An execution is active. "
+                "Do you want to cancel it and close the application?"
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -373,19 +390,20 @@ class MainWindow(QMainWindow):
         self._set_ui_state(state)
         self.results_widget.set_execution_state(state)
         summary = {
-            STATE_STARTING: "Iniciando el worker de Cobaya.",
-            STATE_RUNNING: "La corrida esta en progreso.",
-            STATE_CANCELLING: "Cancelando la corrida activa.",
-            STATE_COMPLETED: "La corrida termino correctamente.",
-            STATE_FAILED: "La corrida fallo.",
-            STATE_CANCELLED: "La corrida fue cancelada.",
-            STATE_IDLE: "Sin ejecucion activa.",
-            STATE_VALIDATING: "Validando la configuracion.",
+            STATE_STARTING: "Starting the Cobaya worker.",
+            STATE_RUNNING: "The run is in progress.",
+            STATE_CANCELLING: "Cancelling the active run.",
+            STATE_COMPLETED: "The run completed successfully.",
+            STATE_FAILED: "The run failed.",
+            STATE_CANCELLED: "The run was cancelled.",
+            STATE_IDLE: "No active execution.",
+            STATE_VALIDATING: "Validating the configuration.",
         }.get(state, message)
         self.statusBar().showMessage(summary, 5000)
 
     def _handle_run_completed(self, run_directory: str) -> None:
         self.current_run_directory = Path(run_directory)
+        self.results_widget.set_latest_completed_run(self.current_run_directory)
         if self.current_run_config is not None:
             sampled = tuple(
                 parameter.symbol
@@ -409,10 +427,11 @@ class MainWindow(QMainWindow):
             self.close()
 
     def _handle_run_failed(self, message: str) -> None:
+        self.results_widget.reset_loaded_results()
         self._apply_feedback(
             self.validation_presenter.present_error(
                 RuntimeError(message),
-                fallback="La ejecucion de Cobaya fallo.",
+                fallback="Cobaya execution failed.",
             )
         )
         if self._close_after_cancel:
@@ -421,6 +440,7 @@ class MainWindow(QMainWindow):
 
     def _handle_run_cancelled(self) -> None:
         self.results_widget.set_execution_state(STATE_CANCELLED)
+        self.results_widget.reset_loaded_results()
         if self._close_after_cancel:
             self._close_after_cancel = False
             self.close()
@@ -429,11 +449,17 @@ class MainWindow(QMainWindow):
         self.current_run_directory = Path(run_directory)
         self.results_widget.set_output_directory(self.current_run_directory)
 
+    def _handle_results_run_loaded(self, payload: object) -> None:
+        run_analysis = getattr(payload, "run_analysis", None)
+        if run_analysis is None:
+            return
+        self.current_run_directory = Path(run_analysis.run_directory)
+
     def _handle_request_rejected(self, message: str) -> None:
         self._apply_feedback(
             self.validation_presenter.present_error(
                 RuntimeError(message),
-                fallback="No se pudo iniciar la corrida.",
+                fallback="Could not start the run.",
             )
         )
         self._set_ui_state(STATE_IDLE)

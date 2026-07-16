@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -9,6 +10,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QPushButton,
+    QScrollArea,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -23,7 +26,7 @@ class SamplerWidget(QWidget):
         self.sampler_kind_edit.setReadOnly(True)
         self.run_label_edit = QLineEdit()
         self.output_directory_edit = QLineEdit()
-        self.output_directory_button = QPushButton("Seleccionar directorio")
+        self.output_directory_button = QPushButton("Select directory")
         self.seed_edit = QLineEdit()
         self.max_samples_edit = QLineEdit()
         self.burn_in_edit = QLineEdit()
@@ -39,17 +42,31 @@ class SamplerWidget(QWidget):
         output_layout.addWidget(self.output_directory_edit)
         output_layout.addWidget(self.output_directory_button)
 
-        form_layout = QFormLayout(self)
+        content = QWidget()
+        form_layout = QFormLayout(content)
         form_layout.addRow("Sampler", self.sampler_kind_edit)
-        form_layout.addRow("Etiqueta de corrida", self.run_label_edit)
-        form_layout.addRow("Directorio de salida", output_layout)
-        form_layout.addRow("Semilla aleatoria", self.seed_edit)
-        form_layout.addRow("Maximo de muestras", self.max_samples_edit)
+        form_layout.addRow("Run label", self.run_label_edit)
+        form_layout.addRow("Output directory", output_layout)
+        form_layout.addRow("Random seed", self.seed_edit)
+        form_layout.addRow("Maximum samples", self.max_samples_edit)
         form_layout.addRow("Burn in", self.burn_in_edit)
         form_layout.addRow("Rminus1_stop", self.rminus1_stop_edit)
         form_layout.addRow("Rminus1_cl_stop", self.rminus1_cl_stop_edit)
         form_layout.addRow(self.learn_proposal_checkbox)
         form_layout.addRow(self.overwrite_checkbox)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.scroll_area.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.scroll_area.setWidget(content)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.scroll_area)
 
     def state(self) -> dict[str, object]:
         return {
@@ -82,7 +99,7 @@ class SamplerWidget(QWidget):
     def _select_output_directory(self) -> None:
         path = QFileDialog.getExistingDirectory(
             self,
-            "Seleccionar directorio de salida",
+            "Select output directory",
             self.output_directory_edit.text(),
         )
         if path:

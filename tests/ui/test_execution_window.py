@@ -17,6 +17,7 @@ from cosmofit.ui.execution_controller import (
     STATE_STARTING,
 )
 from cosmofit.ui.main_window import MainWindow
+from tests.ui.test_results_controller import FakePosteriorResultsService
 
 
 class FakeExecutionController(QObject):
@@ -70,7 +71,7 @@ def test_main_window_button_transitions() -> None:
     run_directory = Path.cwd() / "outputs" / "ui-test-run"
     controller.final_run_directory.emit(str(run_directory))
     controller.state_changed.emit(STATE_RUNNING, "running")
-    controller.log_message.emit("stdout", "linea de log")
+    controller.log_message.emit("stdout", "log line")
     controller.active = False
     controller.state_changed.emit(STATE_COMPLETED, "done")
     controller.completed.emit(str(run_directory))
@@ -79,8 +80,8 @@ def test_main_window_button_transitions() -> None:
     assert window.run_fit_button.isEnabled() is True
     assert window.cancel_run_button.isEnabled() is False
     assert window.results_widget.open_output_button.isEnabled() is True
-    assert "linea de log" in window.results_widget.log_area.toPlainText()
-    assert "Etiqueta" in window.results_widget.summary_label.text()
+    assert "log line" in window.results_widget.log_area.toPlainText()
+    assert "Run label" in window.results_widget.summary_label.text()
 
 
 def test_failed_run_does_not_enable_output_folder() -> None:
@@ -96,7 +97,7 @@ def test_failed_run_does_not_enable_output_folder() -> None:
     app.processEvents()
 
     assert window.results_widget.open_output_button.isEnabled() is False
-    assert "no disponibles" in window.results_widget.summary_label.text().lower()
+    assert "not available yet" in window.results_widget.summary_label.text().lower()
 
 
 def test_cancelling_state_disables_repeat_cancel() -> None:
@@ -163,3 +164,18 @@ def test_successful_run_stores_final_directory() -> None:
 
     assert window.current_run_directory == run_directory
     assert str(run_directory) in window.results_widget.output_directory_label.text()
+
+
+def test_manual_results_load_updates_main_window_run_directory(tmp_path: Path) -> None:
+    app = QApplication.instance() or QApplication([])
+    controller = FakeExecutionController()
+    window = MainWindow(execution_controller=controller)
+    payload = FakePosteriorResultsService(tmp_path).load_run(
+        tmp_path / "manual-run",
+        options=window.results_widget._load_options(),  # noqa: SLF001
+    )
+
+    window.results_widget.results_controller.results_loaded.emit(payload)
+    app.processEvents()
+
+    assert window.current_run_directory == (tmp_path / "manual-run")

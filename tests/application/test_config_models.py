@@ -69,7 +69,7 @@ def _example_run_config() -> RunConfig:
         ),
         parameters=(
             ParameterConfig(
-                name="H0",
+                name=r"$H_0$",
                 symbol="H0",
                 role="sampled",
                 unit="km/s/Mpc",
@@ -78,7 +78,7 @@ def _example_run_config() -> RunConfig:
                 proposal=1.0,
             ),
             ParameterConfig(
-                name="Om",
+                name=r"$\Omega_m$",
                 symbol="Om",
                 role="fixed",
                 value=0.3,

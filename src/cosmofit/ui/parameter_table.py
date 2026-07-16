@@ -5,17 +5,96 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QAbstractScrollArea,
     QCheckBox,
     QComboBox,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QLineEdit,
     QPushButton,
     QTableWidget,
     QVBoxLayout,
     QWidget,
 )
+
+from cosmofit.application import MathTextService
+
+_MATH_TEXT_EXAMPLES = "\n".join(
+    [
+        "Matplotlib MathText examples:",
+        "$H_0$",
+        "$\\Omega_m$",
+        "$\\Lambda$CDM",
+        "$w_0$",
+        "$w_a$",
+    ]
+)
+
+
+class MathTextPreviewField(QWidget):
+    """Line edit plus a small MathText preview rendered outside the UI layer."""
+
+    def __init__(self, *, field_name: str, text: str = "") -> None:
+        super().__init__()
+        self._field_name = field_name
+        self._service = MathTextService()
+
+        self.line_edit = QLineEdit(text)
+        self.line_edit.setToolTip(_MATH_TEXT_EXAMPLES)
+        self.preview_label = QLabel("Preview unavailable.")
+        self.preview_label.setWordWrap(True)
+        self.preview_label.setMinimumHeight(24)
+        self.preview_label.setToolTip(_MATH_TEXT_EXAMPLES)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addWidget(self.line_edit)
+        layout.addWidget(self.preview_label)
+
+        self.line_edit.textChanged.connect(self._refresh_preview)
+        self._refresh_preview(self.line_edit.text())
+
+    def text(self) -> str:
+        return self.line_edit.text()
+
+    def setText(self, text: str) -> None:
+        self.line_edit.setText(text)
+
+    def setEnabled(self, enabled: bool) -> None:  # type: ignore[override]
+        super().setEnabled(enabled)
+        self.line_edit.setEnabled(enabled)
+        self.preview_label.setEnabled(enabled)
+
+    def _refresh_preview(self, text: str) -> None:
+        if not text.strip():
+            self.preview_label.setPixmap(QPixmap())
+            self.preview_label.setStyleSheet("")
+            self.preview_label.setText("Plain text or MathText preview.")
+            return
+
+        try:
+            preview = self._service.render_preview(text, field_name=self._field_name)
+        except ValueError as error:
+            self.preview_label.setPixmap(QPixmap())
+            self.preview_label.setStyleSheet("color: #9b1c1c;")
+            self.preview_label.setText("Invalid MathText.")
+            self.preview_label.setToolTip(f"{_MATH_TEXT_EXAMPLES}\n\n{error}")
+            return
+
+        self.preview_label.setStyleSheet("")
+        self.preview_label.setToolTip(_MATH_TEXT_EXAMPLES)
+        if preview is None:
+            self.preview_label.setPixmap(QPixmap())
+            self.preview_label.setText("Plain text or MathText preview.")
+            return
+        pixmap = QPixmap()
+        pixmap.loadFromData(preview.png_bytes)
+        self.preview_label.setPixmap(pixmap)
+        self.preview_label.setText("")
 
 
 class ParameterTableWidget(QWidget):
@@ -38,25 +117,36 @@ class ParameterTableWidget(QWidget):
         self.table = QTableWidget(0, 10)
         self.table.setHorizontalHeaderLabels(
             [
-                "Nombre",
-                "Etiqueta",
-                "Rol",
+                "Name",
+                "Label",
+                "Role",
                 "Prior min",
                 "Prior max",
-                "Referencia",
-                "Propuesta",
-                "Valor fijo",
-                "Unidad",
+                "Reference",
+                "Proposal",
+                "Fixed value",
+                "Unit",
                 "Nuisance",
             ]
         )
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.table.setSizeAdjustPolicy(
+            QAbstractScrollArea.SizeAdjustPolicy.AdjustIgnored
+        )
+        self.table.setWordWrap(False)
+        self.table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Interactive
+        )
+        self.table.horizontalHeader().setMinimumSectionSize(72)
+        self.table.horizontalHeader().setDefaultSectionSize(120)
+        self.table.horizontalHeader().setStretchLastSection(False)
         self.table.verticalHeader().setVisible(False)
 
-        self.add_button = QPushButton("Agregar parametro")
-        self.remove_button = QPushButton("Eliminar parametro seleccionado")
+        self.add_button = QPushButton("Add parameter")
+        self.remove_button = QPushButton("Remove selected parameter")
         self.add_button.clicked.connect(self.add_parameter_row)
         self.remove_button.clicked.connect(self.remove_selected_parameter)
 
@@ -74,7 +164,10 @@ class ParameterTableWidget(QWidget):
         self.table.insertRow(row)
 
         name_edit = QLineEdit(state.get("name", "") if state else "")
-        label_edit = QLineEdit(state.get("label", "") if state else "")
+        label_edit = MathTextPreviewField(
+            field_name="parameter display label",
+            text=state.get("label", "") if state else "",
+        )
         role_box = QComboBox()
         role_box.addItems(["sampled", "fixed"])
         role_box.setCurrentText(state.get("role", "sampled") if state else "sampled")
@@ -87,7 +180,7 @@ class ParameterTableWidget(QWidget):
         nuisance_box = QCheckBox()
         nuisance_box.setChecked(bool(state.get("nuisance", False)) if state else False)
         nuisance_box.setEnabled(False)
-        nuisance_box.setToolTip("Reservado para futuros parametros de nuisance.")
+        nuisance_box.setToolTip("Reserved for future nuisance parameters.")
         nuisance_box.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
         self.table.setCellWidget(row, self.COLUMN_NAME, name_edit)
@@ -117,7 +210,7 @@ class ParameterTableWidget(QWidget):
             rows.append(
                 {
                     "name": self._line_edit(row, self.COLUMN_NAME).text(),
-                    "label": self._line_edit(row, self.COLUMN_LABEL).text(),
+                    "label": self._label_field(row).text(),
                     "role": self._role_box(row).currentText(),
                     "prior_min": self._line_edit(row, self.COLUMN_PRIOR_MIN).text(),
                     "prior_max": self._line_edit(row, self.COLUMN_PRIOR_MAX).text(),
@@ -163,6 +256,11 @@ class ParameterTableWidget(QWidget):
     def _line_edit(self, row: int, column: int) -> QLineEdit:
         widget = self.table.cellWidget(row, column)
         assert isinstance(widget, QLineEdit)
+        return widget
+
+    def _label_field(self, row: int) -> MathTextPreviewField:
+        widget = self.table.cellWidget(row, self.COLUMN_LABEL)
+        assert isinstance(widget, MathTextPreviewField)
         return widget
 
     def _role_box(self, row: int) -> QComboBox:

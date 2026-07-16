@@ -109,6 +109,8 @@ class RunAnalysis:
     """Loaded run artifacts and parameter metadata for later summaries and plots."""
 
     run_directory: Path
+    run_label: str
+    datasets: tuple[str, ...]
     chain_root: Path
     analysis_directory: Path
     settings: AnalysisSettings

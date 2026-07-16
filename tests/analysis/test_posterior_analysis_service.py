@@ -13,10 +13,15 @@ import yaml
 from cosmofit.analysis import (
     AnalysisPlotSelectionError,
     InvalidAnalysisSettingError,
+    InvalidMathTextError,
     MalformedRunDirectoryError,
     MultipleChainRootsError,
     PosteriorAnalysisService,
     RunNotSuccessfulError,
+)
+from cosmofit.analysis.mathtext import (
+    is_matplotlib_usetex_enabled,
+    validate_mathtext,
 )
 from cosmofit.application import (
     CosmicChronometerDatasetConfig,
@@ -49,6 +54,8 @@ def test_open_run_discovers_chain_root_and_sampled_parameters(tmp_path: Path) ->
     run_analysis = service.open_run(run_directory)
 
     assert run_analysis.chain_root == run_directory / "chains" / "chain"
+    assert run_analysis.run_label == "analysis-test"
+    assert run_analysis.datasets == ("cosmic_chronometers",)
     assert service.parameter_names() == ("Om", "w0")
     metadata = {item.symbol: item for item in service.parameter_metadata()}
     assert metadata["Om"].kind == "sampled"
@@ -127,6 +134,8 @@ def test_plot_1d_generates_png_and_pdf(tmp_path: Path) -> None:
     assert (
         plot_paths.png_path.parent == run_directory / "analysis" / "getdist" / "plots"
     )
+    assert plot_paths.png_path.stat().st_size > 0
+    assert plot_paths.pdf_path.stat().st_size > 0
 
 
 def test_plot_2d_generates_png_and_pdf(tmp_path: Path) -> None:
@@ -138,6 +147,125 @@ def test_plot_2d_generates_png_and_pdf(tmp_path: Path) -> None:
 
     assert plot_paths.png_path.is_file()
     assert plot_paths.pdf_path.is_file()
+
+
+def test_plain_text_title_is_supported(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0",))
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    plot_paths = service.plot_1d("H0", title="Posterior constraints")
+
+    assert plot_paths.png_path.is_file()
+    assert plot_paths.pdf_path.is_file()
+
+
+def test_valid_mathtext_title_is_supported(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0",))
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    plot_paths = service.plot_1d("H0", title=r"Posterior constraints on $H_0$")
+
+    assert plot_paths.png_path.is_file()
+    assert plot_paths.pdf_path.is_file()
+
+
+def test_valid_greek_parameter_label_is_used_for_metadata(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(
+        tmp_path,
+        sampled_symbols=("Om",),
+        display_names={"Om": r"$\Omega_m$"},
+    )
+    service = PosteriorAnalysisService()
+
+    run_analysis = service.open_run(run_directory)
+    plot_paths = service.plot_1d("Om")
+
+    assert run_analysis.parameter_metadata[0].latex_label == r"$\Omega_m$"
+    assert plot_paths.png_path.is_file()
+
+
+def test_subscript_and_superscript_labels_are_supported(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(
+        tmp_path,
+        sampled_symbols=("H0", "wa"),
+        display_names={
+            "H0": r"$H_0$",
+            "wa": r"$w_a^2$",
+        },
+    )
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    plot_paths = service.triangle_plot(("H0", "wa"), title=r"$H_0$ vs $w_a^2$")
+
+    assert plot_paths.png_path.is_file()
+    assert plot_paths.pdf_path.is_file()
+
+
+def test_malformed_mathtext_is_rejected_cleanly(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(
+        tmp_path,
+        sampled_symbols=("Om",),
+        display_names={"Om": r"$\Omega_m"},
+    )
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    with pytest.raises(InvalidMathTextError, match="parameter display label 'Om'"):
+        service.plot_1d("Om")
+
+
+def test_validate_mathtext_rejects_unmatched_opening_dollar() -> None:
+    with pytest.raises(
+        InvalidMathTextError,
+        match="plot title: unbalanced MathText dollar delimiters",
+    ):
+        validate_mathtext(r"$H_0", field_name="plot title")
+
+
+def test_validate_mathtext_rejects_unmatched_closing_dollar() -> None:
+    with pytest.raises(
+        InvalidMathTextError,
+        match="legend label: unbalanced MathText dollar delimiters",
+    ):
+        validate_mathtext(r"H_0$", field_name="legend label")
+
+
+def test_validate_mathtext_accepts_valid_balanced_mathtext() -> None:
+    validate_mathtext(r"$\Omega_m$", field_name="plot title")
+
+
+def test_validate_mathtext_accepts_multiple_balanced_segments() -> None:
+    validate_mathtext(
+        r"Posterior for $\Lambda$CDM and $H_0$",
+        field_name="legend label",
+    )
+
+
+def test_validate_mathtext_rejects_malformed_command() -> None:
+    with pytest.raises(InvalidMathTextError, match="parameter display label 'Om'"):
+        validate_mathtext(r"$\badcommand$", field_name="parameter display label 'Om'")
+
+
+def test_validate_mathtext_ignores_escaped_literal_dollar_sign() -> None:
+    validate_mathtext(r"Cost is \$10^{-3}", field_name="legend label")
+
+
+def test_validate_mathtext_accepts_plain_text_without_mathtext() -> None:
+    validate_mathtext("Plain text", field_name="plot title")
+
+
+def test_mathtext_plotting_does_not_require_external_latex(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0",))
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    plot_paths = service.plot_1d("H0", title=r"$H_0$")
+
+    assert plot_paths.png_path.is_file()
+    assert is_matplotlib_usetex_enabled() is False
 
 
 def test_triangle_plot_supports_five_parameters_and_selected_order(
@@ -164,6 +292,15 @@ def test_duplicate_parameter_selection_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(AnalysisPlotSelectionError, match="Duplicate"):
         service.plot_2d("H0", "H0")
+
+
+def test_duplicate_triangle_parameter_selection_is_rejected(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om", "w0"))
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    with pytest.raises(AnalysisPlotSelectionError, match="Duplicate"):
+        service.triangle_plot(("H0", "Om", "H0"))
 
 
 def test_unknown_parameter_selection_is_rejected(tmp_path: Path) -> None:
@@ -258,6 +395,62 @@ def test_export_summary_csv_creates_expected_rows(tmp_path: Path) -> None:
     assert Path(rows[0]["chain_root"]) == run_directory / "chains" / "chain"
 
 
+def test_failed_second_open_clears_previous_loaded_state(tmp_path: Path) -> None:
+    first_run = create_run_fixture(tmp_path / "first", sampled_symbols=("H0", "Om"))
+    second_run = create_run_fixture(tmp_path / "second", sampled_symbols=("w0",))
+    (second_run / "normalized_config.json").unlink()
+    service = PosteriorAnalysisService()
+    service.open_run(first_run)
+
+    with pytest.raises(MalformedRunDirectoryError):
+        service.open_run(second_run)
+
+    with pytest.raises(InvalidAnalysisSettingError, match="No run is open"):
+        service.parameter_names()
+    assert not (second_run / "analysis" / "getdist").exists()
+
+
+def test_failed_plot_export_does_not_leave_partial_files(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0",))
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    class FakeFigure:
+        def suptitle(self, _title: str) -> None:
+            return None
+
+    class FakePlotter:
+        def __init__(self) -> None:
+            self.fig = FakeFigure()
+            self.export_calls = 0
+
+        def plot_1d(self, *_args, **_kwargs) -> None:
+            return None
+
+        def export(self, path: str) -> None:
+            self.export_calls += 1
+            if self.export_calls == 1:
+                Path(path).write_text("partial", encoding="utf-8")
+                return
+            raise RuntimeError("pdf export failed")
+
+    monkeypatch.setattr(
+        "cosmofit.analysis.service.plots.get_subplot_plotter",
+        FakePlotter,
+    )
+    monkeypatch.setattr("cosmofit.analysis.service.plt.close", lambda _figure: None)
+
+    with pytest.raises(RuntimeError, match="pdf export failed"):
+        service.plot_1d("H0")
+
+    plots_directory = run_directory / "analysis" / "getdist" / "plots"
+    assert not (plots_directory / "1d_H0.png").exists()
+    assert not (plots_directory / "1d_H0.pdf").exists()
+
+
 def test_analysis_package_does_not_import_pyside6() -> None:
     source_files = sorted(Path("src/cosmofit/analysis").glob("*.py"))
 
@@ -272,6 +465,7 @@ def create_run_fixture(
     sampled_symbols: tuple[str, ...],
     fixed_parameters: tuple[ParameterConfig, ...] = (),
     nuisance_symbols: tuple[str, ...] = (),
+    display_names: dict[str, str] | None = None,
     chain_count: int = 1,
     write_chains: bool = True,
     status_state: str = "succeeded",
@@ -284,7 +478,7 @@ def create_run_fixture(
 
     sampled_parameters = tuple(
         ParameterConfig(
-            name=symbol,
+            name=(display_names or {}).get(symbol, symbol),
             symbol=symbol,
             role="sampled",
             prior=UniformPriorConfig(minimum=-5.0, maximum=5.0),

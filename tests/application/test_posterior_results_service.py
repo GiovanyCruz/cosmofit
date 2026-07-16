@@ -1,0 +1,115 @@
+"""Tests for the application-layer posterior results facade."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from cosmofit.analysis import InvalidAnalysisSettingError
+from cosmofit.application import (
+    PosteriorPlotRequest,
+    PosteriorResultsLoadOptions,
+    PosteriorResultsService,
+)
+from tests.support.posterior_run_fixtures import create_run_fixture
+
+
+def test_load_run_uses_managed_temporary_analysis_directory(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om"))
+    service = PosteriorResultsService()
+
+    loaded = service.load_run(
+        run_directory,
+        options=PosteriorResultsLoadOptions(ignore_rows=0.1),
+    )
+
+    assert loaded.run_analysis.run_directory == run_directory
+    assert loaded.run_analysis.run_label == "analysis-test"
+    assert loaded.run_analysis.datasets == ("cosmic_chronometers",)
+    assert loaded.summary.settings.ignore_rows == 0.1
+    assert (
+        loaded.run_analysis.analysis_directory
+        != run_directory / "analysis" / "getdist"
+    )
+    assert loaded.run_analysis.analysis_directory.is_dir()
+
+
+def test_refresh_summary_updates_credible_levels(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om"))
+    service = PosteriorResultsService()
+    service.load_run(run_directory, options=PosteriorResultsLoadOptions())
+
+    loaded = service.refresh_summary((0.95,))
+
+    assert loaded.summary.settings.confidence_levels == (0.95,)
+    assert len(loaded.summary.sampled_parameters[0].credible_intervals) == 1
+
+
+def test_generate_and_export_current_plot(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om"))
+    service = PosteriorResultsService()
+    service.load_run(run_directory, options=PosteriorResultsLoadOptions())
+
+    plot = service.generate_plot(
+        PosteriorPlotRequest(
+            kind="2d",
+            parameters=("H0", "Om"),
+            confidence_levels=(0.68, 0.95),
+            title="Posterior 2D",
+            legend_label="Run A",
+        )
+    )
+    exported_png = service.export_current_plot(tmp_path / "posterior.png")
+    exported_pdf = service.export_current_plot(tmp_path / "posterior.pdf")
+
+    assert plot.export.png_path.is_file()
+    assert plot.export.pdf_path.is_file()
+    assert exported_png.is_file()
+    assert exported_pdf.is_file()
+
+
+def test_export_summary_formats_preserve_metadata(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om"))
+    service = PosteriorResultsService()
+    service.load_run(
+        run_directory,
+        options=PosteriorResultsLoadOptions(ignore_rows=0.2, confidence_levels=(0.95,)),
+    )
+
+    json_artifact = service.export_summary_json(tmp_path / "summary.json")
+    csv_artifact = service.export_summary_csv(tmp_path / "summary.csv")
+
+    payload = json.loads(json_artifact.output_path.read_text(encoding="utf-8"))
+    assert payload["analysis_settings"]["ignore_rows"] == 0.2
+    assert payload["analysis_settings"]["confidence_levels"] == [0.95]
+    assert csv_artifact.output_path.is_file()
+
+
+def test_triangle_plot_requires_at_least_two_parameters(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om"))
+    service = PosteriorResultsService()
+    service.load_run(run_directory, options=PosteriorResultsLoadOptions())
+
+    with pytest.raises(InvalidAnalysisSettingError, match="Triangle plots require"):
+        service.generate_plot(
+            PosteriorPlotRequest(
+                kind="triangle",
+                parameters=("H0",),
+                confidence_levels=(0.68, 0.95),
+            )
+        )
+
+
+def test_clear_removes_session_directory(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0",))
+    service = PosteriorResultsService()
+    loaded = service.load_run(run_directory, options=PosteriorResultsLoadOptions())
+    analysis_directory = loaded.run_analysis.analysis_directory
+
+    service.clear()
+
+    assert not analysis_directory.exists()
+    assert service.loaded_results() is None
+    assert service.current_plot() is None

@@ -175,7 +175,7 @@ def test_duplicate_parameter_validation_is_reported() -> None:
         """
     )
 
-    assert "unicos" in str(payload["summary"])
+    assert "must be unique" in str(payload["summary"])
 
 
 def test_sampled_and_fixed_field_behavior() -> None:
@@ -247,7 +247,7 @@ def test_dataset_conflict_prevention() -> None:
 
     assert payload["pantheonplus"] is True
     assert payload["union3"] is False
-    assert "supernovas" in str(payload["message"])
+    assert "supernova dataset" in str(payload["message"])
 
 
 def test_building_valid_run_config() -> None:
@@ -275,7 +275,7 @@ def test_malformed_configuration_displays_error() -> None:
         """
     )
 
-    assert "expresion" in str(payload["summary"]).lower()
+    assert "h(z) expression cannot be empty" in str(payload["summary"]).lower()
 
 
 def test_save_and_reopen_project_round_trip(tmp_path: Path) -> None:
@@ -313,3 +313,24 @@ def test_ui_modules_do_not_duplicate_scientific_equations() -> None:
     for path in Path("src/cosmofit/ui").rglob("*.py"):
         contents = path.read_text(encoding="utf-8")
         assert all(snippet not in contents for snippet in forbidden_snippets), path
+
+
+def test_ui_source_files_do_not_contain_forbidden_spanish_phrases() -> None:
+    forbidden_phrases = (
+        "Estado",
+        "Directorio final",
+        "Limpiar log",
+        "Abrir carpeta de salida",
+        "No hay resultados cargados",
+        "Grafica actual",
+        "Vista previa no disponible",
+        "Configuracion",
+        "Expresion",
+        "Parametros",
+        "Selecciona un directorio",
+        "Sobrescribir archivo",
+        "Quieres sobrescribirlo",
+    )
+    for path in Path("src/cosmofit/ui").rglob("*.py"):
+        contents = path.read_text(encoding="utf-8")
+        assert all(phrase not in contents for phrase in forbidden_phrases), path

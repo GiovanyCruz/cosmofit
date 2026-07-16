@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import csv
 import json
+import os
+import tempfile
 from dataclasses import asdict
+from hashlib import sha1
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +24,7 @@ from cosmofit.analysis.errors import (
     InvalidAnalysisSettingError,
 )
 from cosmofit.analysis.locator import LocatedRunResult, locate_run_result
+from cosmofit.analysis.mathtext import validate_mathtext
 from cosmofit.analysis.models import (
     AnalysisSettings,
     AnalysisSummary,
@@ -58,13 +62,13 @@ class PosteriorAnalysisService:
     def open_run(self, run_directory: Path) -> RunAnalysis:
         """Load a completed run directory and discover its selectable parameters."""
 
+        self.clear()
         located_run = locate_run_result(run_directory)
         analysis_directory = (
             self._output_directory
             if self._output_directory is not None
             else located_run.run_directory / "analysis" / "getdist"
         ).resolve()
-        analysis_directory.mkdir(parents=True, exist_ok=True)
 
         samples = loadMCSamples(
             str(located_run.chain_root),
@@ -85,8 +89,13 @@ class PosteriorAnalysisService:
         fixed_parameters = tuple(
             _fixed_parameter_values(located_run.normalized_config.parameters)
         )
+        analysis_directory.mkdir(parents=True, exist_ok=True)
         run_analysis = RunAnalysis(
             run_directory=located_run.run_directory,
+            run_label=located_run.normalized_config.runtime.run_label,
+            datasets=tuple(
+                dataset.kind for dataset in located_run.normalized_config.datasets
+            ),
             chain_root=located_run.chain_root,
             analysis_directory=analysis_directory,
             settings=AnalysisSettings(
@@ -103,6 +112,13 @@ class PosteriorAnalysisService:
         self._samples = samples
         self._run_analysis = run_analysis
         return run_analysis
+
+    def clear(self) -> None:
+        """Drop any loaded run and cached GetDist samples."""
+
+        self._located_run = None
+        self._samples = None
+        self._run_analysis = None
 
     def parameter_names(self) -> tuple[str, ...]:
         """Return selectable sampled posterior dimensions in preserved order."""
@@ -180,15 +196,18 @@ class PosteriorAnalysisService:
         *,
         confidence_levels: tuple[float, ...] = _DEFAULT_CONFIDENCE_LEVELS,
         title: str | None = None,
+        legend_label: str | None = None,
     ) -> PlotExportResult:
         """Generate PNG and PDF exports for a one-dimensional marginal plot."""
 
         symbol = self._validate_selection([parameter], expected_count=1)[0]
         return self._export_plot(
-            name=f"1d_{symbol}",
+            name=_plot_name("1d", (symbol,)),
             confidence_levels=confidence_levels,
             render=lambda plotter: plotter.plot_1d(self._samples, symbol),
+            selected_symbols=(symbol,),
             title=title,
+            legend_label=legend_label,
         )
 
     def plot_2d(
@@ -198,12 +217,13 @@ class PosteriorAnalysisService:
         *,
         confidence_levels: tuple[float, ...] = _DEFAULT_CONFIDENCE_LEVELS,
         title: str | None = None,
+        legend_label: str | None = None,
     ) -> PlotExportResult:
         """Generate PNG and PDF exports for a two-dimensional contour plot."""
 
         symbols = self._validate_selection([parameter_x, parameter_y], expected_count=2)
         return self._export_plot(
-            name=f"2d_{symbols[0]}_{symbols[1]}",
+            name=_plot_name("2d", symbols),
             confidence_levels=confidence_levels,
             render=lambda plotter: plotter.plot_2d(
                 self._samples,
@@ -211,7 +231,9 @@ class PosteriorAnalysisService:
                 symbols[1],
                 filled=self._filled_contours,
             ),
+            selected_symbols=symbols,
             title=title,
+            legend_label=legend_label,
         )
 
     def triangle_plot(
@@ -220,19 +242,22 @@ class PosteriorAnalysisService:
         *,
         confidence_levels: tuple[float, ...] = _DEFAULT_CONFIDENCE_LEVELS,
         title: str | None = None,
+        legend_label: str | None = None,
     ) -> PlotExportResult:
         """Generate PNG and PDF exports for an arbitrary-order triangle plot."""
 
         symbols = self._validate_selection(parameters)
         return self._export_plot(
-            name="triangle_" + "_".join(symbols),
+            name=_plot_name("triangle", symbols),
             confidence_levels=confidence_levels,
             render=lambda plotter: plotter.triangle_plot(
                 self._samples,
                 list(symbols),
                 filled=self._filled_contours,
             ),
+            selected_symbols=symbols,
             title=title,
+            legend_label=legend_label,
         )
 
     def export_summary_json(
@@ -262,9 +287,7 @@ class PosteriorAnalysisService:
             "fixed_parameters": [asdict(item) for item in summary.fixed_parameters],
             "diagnostics": _serialize_dataclass_paths(summary.diagnostics),
         }
-        with path.open("w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, sort_keys=True)
-            handle.write("\n")
+        _write_json_atomic(path, payload)
         return path
 
     def export_summary_csv(
@@ -300,31 +323,33 @@ class PosteriorAnalysisService:
             fieldnames.extend(
                 [f"cl_{token}_lower", f"cl_{token}_upper", f"cl_{token}_limit_type"]
             )
-        with path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fieldnames)
-            writer.writeheader()
-            for parameter in summary.sampled_parameters:
-                row = {
-                    "source_run_directory": str(summary.run_directory),
-                    "chain_root": str(summary.chain_root),
-                    "ignore_rows": summary.settings.ignore_rows,
-                    "parameter_symbol": parameter.symbol,
-                    "parameter_name": parameter.display_name,
-                    "latex_label": parameter.latex_label,
-                    "parameter_kind": parameter.kind,
-                    "unit": parameter.unit or "",
-                    "mean": parameter.mean,
-                    "standard_deviation": parameter.standard_deviation,
-                    "median": parameter.median,
-                    "maximum_posterior": parameter.maximum_posterior,
-                }
-                for interval, token in zip(
-                    parameter.credible_intervals, level_tokens, strict=True
-                ):
-                    row[f"cl_{token}_lower"] = interval.lower
-                    row[f"cl_{token}_upper"] = interval.upper
-                    row[f"cl_{token}_limit_type"] = interval.limit_type
-                writer.writerow(row)
+        with _temporary_output_path(path) as temporary_path:
+            with temporary_path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
+                writer.writeheader()
+                for parameter in summary.sampled_parameters:
+                    row = {
+                        "source_run_directory": str(summary.run_directory),
+                        "chain_root": str(summary.chain_root),
+                        "ignore_rows": summary.settings.ignore_rows,
+                        "parameter_symbol": parameter.symbol,
+                        "parameter_name": parameter.display_name,
+                        "latex_label": parameter.latex_label,
+                        "parameter_kind": parameter.kind,
+                        "unit": parameter.unit or "",
+                        "mean": parameter.mean,
+                        "standard_deviation": parameter.standard_deviation,
+                        "median": parameter.median,
+                        "maximum_posterior": parameter.maximum_posterior,
+                    }
+                    for interval, token in zip(
+                        parameter.credible_intervals, level_tokens, strict=True
+                    ):
+                        row[f"cl_{token}_lower"] = interval.lower
+                        row[f"cl_{token}_upper"] = interval.upper
+                        row[f"cl_{token}_limit_type"] = interval.limit_type
+                    writer.writerow(row)
+            temporary_path.replace(path)
         return path
 
     def _validate_selection(
@@ -362,22 +387,43 @@ class PosteriorAnalysisService:
         name: str,
         confidence_levels: tuple[float, ...],
         render: Any,
+        selected_symbols: tuple[str, ...],
         title: str | None,
+        legend_label: str | None,
     ) -> PlotExportResult:
         run_analysis = self._require_run_analysis()
         levels = _validate_confidence_levels(confidence_levels)
         self._samples.updateSettings({"contours": list(levels)})
+        _validate_plot_text(
+            run_analysis=run_analysis,
+            selected_symbols=selected_symbols,
+            title=title,
+            legend_label=legend_label,
+        )
         plotter = plots.get_subplot_plotter()
-        render(plotter)
-        if title:
-            plotter.fig.suptitle(title)
         output_directory = run_analysis.analysis_directory / "plots"
         output_directory.mkdir(parents=True, exist_ok=True)
         png_path = output_directory / f"{name}.png"
         pdf_path = output_directory / f"{name}.pdf"
         try:
-            plotter.export(str(png_path))
-            plotter.export(str(pdf_path))
+            render(plotter)
+            _apply_plot_axis_labels(
+                plotter,
+                run_analysis=run_analysis,
+                selected_symbols=selected_symbols,
+            )
+            if legend_label:
+                plotter.add_legend([legend_label])
+            if title:
+                plotter.fig.suptitle(title)
+            with (
+                _temporary_output_path(png_path) as temporary_png_path,
+                _temporary_output_path(pdf_path) as temporary_pdf_path,
+            ):
+                plotter.export(str(temporary_png_path))
+                plotter.export(str(temporary_pdf_path))
+                temporary_png_path.replace(png_path)
+                temporary_pdf_path.replace(pdf_path)
         finally:
             plt.close(plotter.fig)
         return PlotExportResult(png_path=png_path, pdf_path=pdf_path)
@@ -410,7 +456,11 @@ def _build_parameter_metadata(
         metadata.append(
             PosteriorParameterMetadata(
                 symbol=parameter_info.name,
-                latex_label=parameter_info.label,
+                latex_label=(
+                    parameter_definition.name
+                    if parameter_definition is not None
+                    else parameter_info.label
+                ),
                 kind=kind,
                 display_name=(
                     parameter_definition.name
@@ -426,6 +476,56 @@ def _build_parameter_metadata(
         )
     ordered_metadata = _ordered_sample_metadata(metadata, located_run)
     return tuple(ordered_metadata)
+
+
+def _validate_plot_text(
+    *,
+    run_analysis: RunAnalysis,
+    selected_symbols: tuple[str, ...],
+    title: str | None,
+    legend_label: str | None,
+) -> None:
+    validate_mathtext(title, field_name="plot title")
+    validate_mathtext(legend_label, field_name="legend label")
+    metadata_by_symbol = {
+        metadata.symbol: metadata for metadata in run_analysis.parameter_metadata
+    }
+    for symbol in selected_symbols:
+        metadata = metadata_by_symbol[symbol]
+        validate_mathtext(
+            metadata.latex_label,
+            field_name=f"parameter display label '{symbol}'",
+        )
+
+
+def _apply_plot_axis_labels(
+    plotter: Any,
+    *,
+    run_analysis: RunAnalysis,
+    selected_symbols: tuple[str, ...],
+) -> None:
+    metadata_by_symbol = {
+        metadata.symbol: metadata for metadata in run_analysis.parameter_metadata
+    }
+    replacements = {
+        symbol: metadata_by_symbol[symbol].latex_label for symbol in selected_symbols
+    }
+    for axis in getattr(plotter.fig, "axes", []):
+        xlabel = axis.get_xlabel()
+        ylabel = axis.get_ylabel()
+        replacement_x = replacements.get(_label_lookup_key(xlabel))
+        replacement_y = replacements.get(_label_lookup_key(ylabel))
+        if replacement_x is not None:
+            axis.set_xlabel(replacement_x)
+        if replacement_y is not None:
+            axis.set_ylabel(replacement_y)
+
+
+def _label_lookup_key(label: str) -> str:
+    stripped = label.strip()
+    if stripped.startswith("$") and stripped.endswith("$") and len(stripped) >= 2:
+        stripped = stripped[1:-1]
+    return stripped
 
 
 def _ordered_sample_metadata(
@@ -584,3 +684,42 @@ def _serialize_dataclass_paths(value: Any) -> Any:
             key: _serialize_dataclass_paths(item) for key, item in asdict(value).items()
         }
     return value
+
+
+def _plot_name(prefix: str, symbols: tuple[str, ...]) -> str:
+    stem = prefix + "_" + "_".join(symbols)
+    if len(stem) <= 120:
+        return stem
+    digest = sha1(stem.encode("utf-8")).hexdigest()[:12]
+    visible_symbols = "_".join(symbols[:3])
+    return f"{prefix}_{visible_symbols}_{digest}"
+
+
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    with _temporary_output_path(path) as temporary_path:
+        with temporary_path.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        temporary_path.replace(path)
+
+
+class _temporary_output_path:
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._temporary_path: Path | None = None
+
+    def __enter__(self) -> Path:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, raw_path = tempfile.mkstemp(
+            prefix=self._path.stem + "-",
+            suffix=self._path.suffix,
+            dir=self._path.parent,
+        )
+        os.close(descriptor)
+        Path(raw_path).unlink(missing_ok=True)
+        self._temporary_path = Path(raw_path)
+        return self._temporary_path
+
+    def __exit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
+        if self._temporary_path is not None:
+            self._temporary_path.unlink(missing_ok=True)

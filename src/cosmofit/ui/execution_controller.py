@@ -91,14 +91,14 @@ class ExecutionController(QObject):
 
     def start_run(self, run_config: RunConfig) -> bool:
         if self._state.active:
-            self.request_rejected.emit("Ya existe una ejecucion activa.")
+            self.request_rejected.emit("An execution is already active.")
             return False
 
         try:
             prepared = prepare_worker_request(run_config)
         except Exception as error:
             self.request_rejected.emit(
-                str(error) or "No se pudo preparar la ejecucion."
+                str(error) or "Could not prepare the execution."
             )
             return False
         self._prepared = prepared
@@ -108,7 +108,7 @@ class ExecutionController(QObject):
         self._pending_terminal_event = None
         self._set_state(
             STATE_STARTING,
-            "Preparando el proceso de Cobaya.",
+            "Preparing the Cobaya process.",
             active=True,
             run_directory=prepared.artifacts.run_directory,
             output_root=prepared.output_root,
@@ -134,7 +134,7 @@ class ExecutionController(QObject):
         if self._cancellation_requested:
             return False
         self._cancellation_requested = True
-        self._set_state(STATE_CANCELLING, "Solicitando cancelacion del ajuste.")
+        self._set_state(STATE_CANCELLING, "Requesting fit cancellation.")
         self._process.terminate()
         self._kill_timer.start(self._cancellation_timeout_ms)
         return True
@@ -179,13 +179,13 @@ class ExecutionController(QObject):
         ):
             self._set_state(
                 STATE_CANCELLED,
-                "La ejecucion fue cancelada.",
+                "The execution was cancelled.",
                 active=False,
             )
             self.cancelled.emit()
             self.cleanup()
             return
-        message = self._process.errorString() or "No se pudo iniciar el worker."
+        message = self._process.errorString() or "Could not start the worker."
         self._set_state(STATE_FAILED, message, active=False)
         self.failed.emit(message)
         self.cleanup()
@@ -268,7 +268,7 @@ class ExecutionController(QObject):
             and status.get("state") == "succeeded"
             and run_directory
         ):
-            message = "El ajuste termino correctamente."
+            message = "The fit completed successfully."
             self._set_state(
                 STATE_COMPLETED,
                 message,
@@ -278,7 +278,7 @@ class ExecutionController(QObject):
             return STATE_COMPLETED, message
 
         if status and status.get("state") == "cancelled":
-            message = "La ejecucion fue cancelada."
+            message = "The execution was cancelled."
             self._set_state(
                 STATE_CANCELLED,
                 message,
@@ -287,7 +287,7 @@ class ExecutionController(QObject):
             )
             return STATE_CANCELLED, message
 
-        message = "La ejecucion fallo."
+        message = "The execution failed."
         if (
             status
             and isinstance(status.get("message"), str)
@@ -300,7 +300,7 @@ class ExecutionController(QObject):
         ):
             message = self._pending_terminal_event[1]
         elif self._cancellation_requested and exit_code != 0:
-            message = "La ejecucion fue cancelada."
+            message = "The execution was cancelled."
             self._set_state(
                 STATE_CANCELLED,
                 message,
@@ -309,7 +309,7 @@ class ExecutionController(QObject):
             )
             return STATE_CANCELLED, message
         elif exit_code == 0:
-            message = "El worker termino sin artefactos finales validos."
+            message = "The worker finished without valid final artifacts."
         self._set_state(
             STATE_FAILED,
             message,
@@ -330,7 +330,7 @@ class ExecutionController(QObject):
         except (OSError, json.JSONDecodeError):
             return {
                 "state": "malformed",
-                "message": "La salida del worker es invalida.",
+                "message": "The worker output is invalid.",
             }
         return payload if isinstance(payload, dict) else None
 

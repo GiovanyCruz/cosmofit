@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -12,6 +13,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -26,16 +28,17 @@ class DatasetsWidget(QWidget):
 
         self.cosmic_chronometers_checkbox = QCheckBox("cosmic chronometers")
         self.cosmic_chronometers_path_edit = QLineEdit()
-        self.cosmic_chronometers_browse_button = QPushButton("Seleccionar CSV")
+        self.cosmic_chronometers_browse_button = QPushButton("Select CSV")
         self.pantheonplus_checkbox = QCheckBox("sn.pantheonplus")
         self.pantheonplusshoes_checkbox = QCheckBox("sn.pantheonplusshoes")
         self.union3_checkbox = QCheckBox("sn.union3")
-        self.use_abs_mag_label = QLabel("use_abs_mag = false en esta version")
-        self.packages_path_label = QLabel("Ruta de paquetes Cobaya: no disponible")
+        self.use_abs_mag_label = QLabel("use_abs_mag = false in this version")
+        self.packages_path_label = QLabel("Cobaya packages path: unavailable")
+        self.packages_path_label.setWordWrap(True)
         self.conflict_message = QTextEdit()
         self.conflict_message.setReadOnly(True)
         self.conflict_message.setPlaceholderText(
-            "Los conflictos de conjuntos de datos se mostraran aqui."
+            "Dataset conflict messages will appear here."
         )
 
         self.cosmic_chronometers_browse_button.clicked.connect(
@@ -58,13 +61,28 @@ class DatasetsWidget(QWidget):
         form_layout.addRow(self.pantheonplus_checkbox)
         form_layout.addRow(self.pantheonplusshoes_checkbox)
         form_layout.addRow(self.union3_checkbox)
-        form_layout.addRow("Supernovas", self.use_abs_mag_label)
-        form_layout.addRow("Paquetes Cobaya", self.packages_path_label)
+        form_layout.addRow("Supernovae", self.use_abs_mag_label)
+        form_layout.addRow("Cobaya packages", self.packages_path_label)
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.addLayout(form_layout)
+        content_layout.addWidget(QLabel("Messages"))
+        content_layout.addWidget(self.conflict_message)
+        content_layout.addStretch(1)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.scroll_area.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.scroll_area.setWidget(content)
 
         layout = QVBoxLayout(self)
-        layout.addLayout(form_layout)
-        layout.addWidget(QLabel("Mensajes"))
-        layout.addWidget(self.conflict_message)
+        layout.addWidget(self.scroll_area)
 
     def state(self) -> dict[str, object]:
         return {
@@ -93,9 +111,9 @@ class DatasetsWidget(QWidget):
 
     def set_packages_path(self, path: Path | None) -> None:
         if path is None:
-            self.packages_path_label.setText("Ruta de paquetes Cobaya: no disponible")
+            self.packages_path_label.setText("Cobaya packages path: unavailable")
             return
-        self.packages_path_label.setText(f"Ruta de paquetes Cobaya: {path}")
+        self.packages_path_label.setText(f"Cobaya packages path: {path}")
 
     def set_conflict_message(self, message: str) -> None:
         self.conflict_message.setPlainText(message)
@@ -109,8 +127,8 @@ class DatasetsWidget(QWidget):
             if checkbox.isChecked():
                 toggled.setChecked(False)
                 self.set_conflict_message(
-                    "Solo puedes seleccionar un conjunto de supernovas "
-                    "por defecto para evitar solapamientos."
+                    "You can select only one default supernova dataset "
+                    "to avoid overlap."
                 )
                 return
         self.conflict_message.clear()
@@ -118,9 +136,9 @@ class DatasetsWidget(QWidget):
     def _select_cosmic_chronometer_csv(self) -> None:
         path, _selected_filter = QFileDialog.getOpenFileName(
             self,
-            "Seleccionar CSV de cronometros cosmicos",
+            "Select cosmic chronometer CSV",
             self.cosmic_chronometers_path_edit.text(),
-            "CSV (*.csv);;Todos los archivos (*)",
+            "CSV (*.csv);;All files (*)",
         )
         if path:
             self.cosmic_chronometers_path_edit.setText(path)

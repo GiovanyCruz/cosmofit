@@ -122,7 +122,7 @@ class ProjectController:
         build_background_model(run_config)
         return ValidationResult(
             run_config=run_config,
-            summary="El modelo H(z) es valido para los parametros actuales.",
+            summary="The H(z) model is valid for the current parameters.",
         )
 
     def validate_configuration(self, state: dict[str, Any]) -> ValidationResult:
@@ -133,7 +133,7 @@ class ProjectController:
                 build_cosmic_chronometers_likelihood(dataset)
         return ValidationResult(
             run_config=run_config,
-            summary="La configuracion es valida y esta lista para el siguiente hito.",
+            summary="Configuration is valid.",
         )
 
     def build_run_config(self, state: dict[str, Any]) -> RunConfig:
@@ -159,24 +159,23 @@ class ProjectController:
             data = json.loads(path.read_text(encoding="utf-8"))
         except JSONDecodeError as error:
             raise ProjectFileError(
-                "El archivo del proyecto no contiene JSON valido."
+                "The project file does not contain valid JSON."
             ) from error
         except OSError as error:
             raise ProjectFileError(
-                "No se pudo leer el archivo del proyecto."
+                "Could not read the project file."
             ) from error
 
         if not isinstance(data, dict):
             raise ProjectFileError(
-                "El archivo del proyecto debe contener un objeto JSON."
+                "The project file must contain a JSON object."
             )
 
         try:
             run_config = deserialize_run_config(data)
         except (KeyError, TypeError, ValueError) as error:
             raise ProjectFileError(
-                "El archivo del proyecto no coincide con el formato "
-                "normalizado de CosmoFit."
+                "The project file does not match the normalized CosmoFit format."
             ) from error
         return self._run_config_to_state(run_config)
 
@@ -185,7 +184,7 @@ class ProjectController:
             kind="hz_expression_flat",
             expression=self._require_text(
                 model_state.get("expression", ""),
-                message="Debes escribir una expresion H(z).",
+                message="The H(z) expression cannot be empty.",
             ),
         )
 
@@ -193,23 +192,23 @@ class ProjectController:
         self, parameter_rows: list[dict[str, Any]]
     ) -> tuple[ParameterConfig, ...]:
         if not parameter_rows:
-            raise ProjectError("Debes definir al menos un parametro cosmologico.")
+            raise ProjectError("At least one cosmological parameter is required.")
 
         symbols = [
             self._require_text(
                 row.get("name", ""),
-                message="Cada parametro necesita un nombre interno.",
+                message="Parameter name must not be empty.",
             )
             for row in parameter_rows
         ]
         if len(symbols) != len(set(symbols)):
-            raise ProjectError("Los nombres de los parametros deben ser unicos.")
+            raise ProjectError("Parameter names must be unique.")
 
         parameters: list[ParameterConfig] = []
         for row in parameter_rows:
             symbol = self._require_text(
                 row.get("name", ""),
-                message="Cada parametro necesita un nombre interno.",
+                message="Parameter name must not be empty.",
             )
             display_name = self._optional_text(row.get("label")) or symbol
             role = row.get("role", "sampled")
@@ -224,8 +223,7 @@ class ProjectController:
                         value=self._parse_float(
                             row.get("fixed_value", ""),
                             message=(
-                                f"El parametro fijo '{symbol}' necesita "
-                                "un valor numerico."
+                                f"Fixed parameter '{symbol}' requires a numeric value."
                             ),
                         ),
                     )
@@ -242,30 +240,28 @@ class ProjectController:
                         minimum=self._parse_float(
                             row.get("prior_min", ""),
                             message=(
-                                f"El parametro muestreado '{symbol}' necesita "
-                                "un prior minimo."
+                                f"Sampled parameter '{symbol}' requires "
+                                "a prior minimum."
                             ),
                         ),
                         maximum=self._parse_float(
                             row.get("prior_max", ""),
                             message=(
-                                f"El parametro muestreado '{symbol}' necesita "
-                                "un prior maximo."
+                                f"Sampled parameter '{symbol}' requires "
+                                "a prior maximum."
                             ),
                         ),
                     ),
                     reference=self._parse_float(
                         row.get("reference", ""),
                         message=(
-                            f"El parametro muestreado '{symbol}' necesita "
-                            "un valor de referencia."
+                            f"Sampled parameter '{symbol}' requires a reference value."
                         ),
                     ),
                     proposal=self._parse_float(
                         row.get("proposal", ""),
                         message=(
-                            f"El parametro muestreado '{symbol}' necesita "
-                            "una propuesta numerica."
+                            f"Sampled parameter '{symbol}' requires a numeric proposal."
                         ),
                     ),
                 )
@@ -282,7 +278,7 @@ class ProjectController:
                 self._require_text(
                     dataset_state.get("cosmic_chronometers_path", ""),
                     message=(
-                        "Debes seleccionar un archivo CSV para cronometros cosmicos."
+                        "Select a CSV file for cosmic chronometers."
                     ),
                 )
             )
@@ -305,8 +301,7 @@ class ProjectController:
         ]
         if len(selected_supernovae) > 1:
             raise ProjectError(
-                "Solo puedes seleccionar un conjunto de supernovas "
-                "por defecto para evitar solapamientos."
+                "You can select only one default supernova dataset to avoid overlap."
             )
         if selected_supernovae:
             datasets.append(
@@ -323,25 +318,25 @@ class ProjectController:
             kind="cobaya_mcmc",
             seed=self._parse_int(
                 sampler_state.get("seed", ""),
-                message="La semilla aleatoria debe ser un entero no negativo.",
+                message="Random seed must be a non-negative integer.",
             ),
             max_samples=self._parse_optional_int(
                 sampler_state.get("max_samples", ""),
-                message="El maximo de muestras debe ser un entero positivo.",
+                message="Maximum samples must be a positive integer.",
             ),
             burn_in=self._parse_optional_int(
                 sampler_state.get("burn_in", ""),
-                message="El burn in debe ser un entero no negativo.",
+                message="Burn in must be a non-negative integer.",
                 allow_zero=True,
             ),
             learn_proposal=bool(sampler_state.get("learn_proposal", False)),
             Rminus1_stop=self._parse_optional_float(
                 sampler_state.get("Rminus1_stop", ""),
-                message="Rminus1_stop debe ser un numero positivo.",
+                message="Rminus1_stop must be a positive number.",
             ),
             Rminus1_cl_stop=self._parse_optional_float(
                 sampler_state.get("Rminus1_cl_stop", ""),
-                message="Rminus1_cl_stop debe ser un numero positivo.",
+                message="Rminus1_cl_stop must be a positive number.",
             ),
         )
 
@@ -349,12 +344,12 @@ class ProjectController:
         return RuntimeConfig(
             run_label=self._require_text(
                 sampler_state.get("run_label", ""),
-                message="El identificador de la corrida no puede estar vacio.",
+                message="Run label cannot be empty.",
             ),
             output_directory=Path(
                 self._require_text(
                     sampler_state.get("output_directory", ""),
-                    message="Debes seleccionar un directorio de salida.",
+                    message="Select an output directory.",
                 )
             ),
             overwrite=bool(sampler_state.get("overwrite", False)),

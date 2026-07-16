@@ -15,7 +15,7 @@ class ValidationFeedback:
 
 
 class ValidationPresenter:
-    """Translate backend exceptions into concise Spanish messages."""
+    """Translate backend exceptions into concise English messages."""
 
     def present_success(self, summary: str) -> ValidationFeedback:
         return ValidationFeedback(success=True, summary=summary, details=summary)
@@ -41,117 +41,113 @@ class ValidationPresenter:
         translations = (
             (
                 "Parameter names must be unique.",
-                "Los nombres de los parametros deben ser unicos.",
+                "Parameter names must be unique.",
             ),
             (
                 "Parameter symbols must be unique.",
-                "Los nombres internos de los parametros deben ser unicos.",
+                "Parameter symbols must be unique.",
             ),
             (
                 "Dataset selections must be unique.",
-                "No se puede seleccionar el mismo conjunto de datos mas de una vez.",
+                "Dataset selections must be unique.",
             ),
             (
                 "At least one dataset must be selected.",
-                "Debes seleccionar al menos un conjunto de datos.",
+                "At least one dataset must be selected.",
             ),
             (
                 "At least one cosmological parameter is required.",
-                "Debes definir al menos un parametro cosmologico.",
+                "At least one cosmological parameter is required.",
             ),
             (
                 "Parameter name must not be empty.",
-                "Cada parametro necesita un nombre interno.",
+                "Parameter name must not be empty.",
             ),
             (
                 "must be a valid identifier",
-                "El nombre interno del parametro debe ser "
-                "un identificador valido.",
+                "Parameter symbol must be a valid identifier.",
             ),
-            ("is reserved.", "Ese nombre de parametro esta reservado."),
+            ("is reserved.", "That parameter symbol is reserved."),
             (
                 "conflicts with an allowed function.",
-                "El nombre interno del parametro coincide con "
-                "una funcion aprobada.",
+                "Parameter symbol conflicts with an allowed function.",
             ),
-            ("requires a prior.", "Un parametro muestreado necesita limites de prior."),
+            ("requires a prior.", "A sampled parameter requires prior bounds."),
             (
                 "requires a reference value.",
-                "Un parametro muestreado necesita un valor de referencia.",
+                "A sampled parameter requires a reference value.",
             ),
             (
                 "requires a strictly positive proposal.",
-                "Un parametro muestreado necesita una propuesta "
-                "estrictamente positiva.",
+                "A sampled parameter requires a strictly positive proposal.",
             ),
             (
                 "must lie within the prior bounds.",
-                "El valor de referencia debe estar dentro de los limites del prior.",
+                "The reference value must lie within the prior bounds.",
             ),
             (
                 "Fixed parameter",
-                "Un parametro fijo necesita un valor y no puede incluir "
-                "prior ni propuesta.",
+                "A fixed parameter requires a value and must not define "
+                "a prior or proposal.",
             ),
             (
                 "Model expression must not be empty.",
-                "La expresion H(z) no puede estar vacia.",
+                "The H(z) expression cannot be empty.",
             ),
             (
                 "Invalid H(z) expression syntax",
-                "La expresion H(z) tiene una sintaxis invalida.",
+                "The H(z) expression has invalid syntax.",
             ),
-            ("Unknown symbol", "La expresion H(z) usa un simbolo no declarado."),
+            ("Unknown symbol", "The H(z) expression uses an undeclared symbol."),
             (
                 "not in the approved function list",
-                "La expresion H(z) usa una funcion no aprobada.",
+                "The H(z) expression uses a function outside the approved list.",
             ),
             (
                 "Only arithmetic binary operations are allowed.",
-                "La expresion H(z) solo permite operaciones aritmeticas.",
+                "The H(z) expression allows only arithmetic operations.",
             ),
             (
                 "Attribute access is not allowed.",
-                "La expresion H(z) no permite acceso por atributos.",
+                "The H(z) expression does not allow attribute access.",
             ),
             (
                 "Subscript access is not allowed.",
-                "La expresion H(z) no permite indices ni subscripts.",
+                "The H(z) expression does not allow subscript access.",
             ),
             (
                 "Lambda expressions are not allowed.",
-                "La expresion H(z) no permite lambdas.",
+                "The H(z) expression does not allow lambda expressions.",
             ),
             (
                 "Conditional expressions are not allowed.",
-                "La expresion H(z) no permite expresiones condicionales.",
+                "The H(z) expression does not allow conditional expressions.",
             ),
             (
                 "Collection literals are not allowed.",
-                "La expresion H(z) no permite colecciones literales.",
+                "The H(z) expression does not allow collection literals.",
             ),
             (
                 "Comprehensions are not allowed.",
-                "La expresion H(z) no permite comprensiones.",
+                "The H(z) expression does not allow comprehensions.",
             ),
-            ("CSV file is empty.", "El archivo de cronometros cosmicos esta vacio."),
+            ("CSV file is empty.", "The cosmic chronometer CSV file is empty."),
             (
                 "Cosmic chronometer CSV header must be exactly 'z,H,sigma'.",
-                "El archivo de cronometros cosmicos debe usar el "
-                "encabezado exacto 'z,H,sigma'.",
+                "The cosmic chronometer CSV header must be exactly 'z,H,sigma'.",
             ),
             (
                 "Could not parse cosmic chronometer CSV",
-                "No se pudo leer el archivo CSV de cronometros cosmicos.",
+                "Could not parse the cosmic chronometer CSV file.",
             ),
-            ("No such file or directory", "No se encontro el archivo seleccionado."),
+            ("No such file or directory", "The selected file was not found."),
             (
                 "Unsupported dataset kind",
-                "El conjunto de datos seleccionado no esta soportado.",
+                "The selected dataset is not supported.",
             ),
             (
                 "Unsupported supernova dataset component name.",
-                "El conjunto de datos de supernova no esta soportado.",
+                "The selected supernova dataset is not supported.",
             ),
         )
         for needle, translated in translations:

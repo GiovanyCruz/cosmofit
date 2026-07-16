@@ -21,6 +21,19 @@ class InvalidAnalysisSettingError(AnalysisError):
     code = "invalid_analysis_setting"
 
 
+class InvalidMathTextError(InvalidAnalysisSettingError):
+    """Raised when a Matplotlib MathText label cannot be rendered safely."""
+
+    code = "invalid_mathtext"
+
+    def __init__(self, *, field_name: str, details: str) -> None:
+        super().__init__(
+            f"Invalid Matplotlib MathText in {field_name}: {details}"
+        )
+        self.field_name = field_name
+        self.details = details
+
+
 class MalformedRunDirectoryError(AnalysisError):
     """Raised when a run directory is incomplete or malformed."""
 
