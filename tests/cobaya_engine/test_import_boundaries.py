@@ -42,6 +42,16 @@ def test_only_analysis_imports_matplotlib() -> None:
     assert offending_files == []
 
 
+def test_worker_entry_points_do_not_import_pyside6() -> None:
+    offending_files = _find_offending_imports(
+        "PySide6",
+        allowed_root=Path("src/cosmofit/ui"),
+    )
+
+    assert "src/cosmofit/application/run_worker.py" not in offending_files
+    assert "src/cosmofit/cobaya_engine/worker.py" not in offending_files
+
+
 def _find_offending_imports(module_name: str, *, allowed_root: Path) -> list[str]:
     offenders: list[str] = []
     for path in Path("src/cosmofit").rglob("*.py"):

@@ -35,6 +35,7 @@ class RunArtifacts:
     worker_log_path: Path
     cobaya_stdout_path: Path
     cobaya_stderr_path: Path
+    events_path: Path
     chain_prefix: Path
 
 
@@ -70,6 +71,7 @@ def prepare_run_artifacts(run_config: RunConfig) -> RunArtifacts:
         worker_log_path=logs_directory / "worker.log",
         cobaya_stdout_path=logs_directory / "cobaya.stdout.log",
         cobaya_stderr_path=logs_directory / "cobaya.stderr.log",
+        events_path=logs_directory / "events.jsonl",
         chain_prefix=chains_directory / "chain",
     )
 
@@ -114,9 +116,7 @@ def write_status(
     }
     if extra:
         payload.update(extra)
-    with artifacts.status_path.open("w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, sort_keys=True)
-        handle.write("\n")
+    _write_json_atomic(artifacts.status_path, payload)
 
 
 def write_updated_cobaya_input(
@@ -165,6 +165,12 @@ def write_metadata(artifacts: RunArtifacts, run_config: RunConfig) -> None:
         handle.write("\n")
 
 
+def write_json_artifact(path: Path, payload: dict[str, Any]) -> None:
+    """Write a JSON artifact atomically."""
+
+    _write_json_atomic(path, payload)
+
+
 def list_chain_files(artifacts: RunArtifacts) -> list[str]:
     """Return the chain files produced under the chain output directory."""
 
@@ -189,3 +195,11 @@ def _serialize_yaml_value(value: Any) -> Any:
     if isinstance(value, tuple):
         return [_serialize_yaml_value(item) for item in value]
     return value
+
+
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    temporary_path = path.with_suffix(path.suffix + ".tmp")
+    with temporary_path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    temporary_path.replace(path)
