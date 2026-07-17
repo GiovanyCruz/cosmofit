@@ -9,11 +9,13 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QFormLayout,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -32,9 +34,22 @@ class DatasetsWidget(QWidget):
         self.pantheonplus_checkbox = QCheckBox("sn.pantheonplus")
         self.pantheonplusshoes_checkbox = QCheckBox("sn.pantheonplusshoes")
         self.union3_checkbox = QCheckBox("sn.union3")
-        self.use_abs_mag_label = QLabel("use_abs_mag = false in this version")
-        self.packages_path_label = QLabel("Cobaya packages path: unavailable")
-        self.packages_path_label.setWordWrap(True)
+        self.use_abs_mag_label = QLabel(
+            "Supernova likelihoods currently marginalize over the "
+            "absolute-magnitude calibration internally."
+        )
+        self.use_abs_mag_label.setWordWrap(True)
+        self.use_abs_mag_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        self.use_abs_mag_label.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Preferred,
+        )
+        self.packages_path_edit = QLineEdit()
+        self.packages_path_edit.setReadOnly(True)
+        self.packages_path_edit.setPlaceholderText("Unavailable")
+        self.packages_path_edit.setToolTip("Cobaya packages path unavailable.")
         self.conflict_message = QTextEdit()
         self.conflict_message.setReadOnly(True)
         self.conflict_message.setPlaceholderText(
@@ -57,12 +72,21 @@ class DatasetsWidget(QWidget):
         chronometer_layout.addWidget(self.cosmic_chronometers_browse_button)
 
         form_layout = QFormLayout()
+        form_layout.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
+        form_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         form_layout.addRow(self.cosmic_chronometers_checkbox, chronometer_layout)
         form_layout.addRow(self.pantheonplus_checkbox)
         form_layout.addRow(self.pantheonplusshoes_checkbox)
         form_layout.addRow(self.union3_checkbox)
         form_layout.addRow("Supernovae", self.use_abs_mag_label)
-        form_layout.addRow("Cobaya packages", self.packages_path_label)
+        packages_row = QWidget()
+        packages_layout = QGridLayout(packages_row)
+        packages_layout.setContentsMargins(0, 0, 0, 0)
+        packages_layout.addWidget(self.packages_path_edit, 0, 0)
+        packages_layout.setColumnStretch(0, 1)
+        form_layout.addRow("Cobaya packages", packages_row)
 
         content = QWidget()
         content_layout = QVBoxLayout(content)
@@ -111,9 +135,13 @@ class DatasetsWidget(QWidget):
 
     def set_packages_path(self, path: Path | None) -> None:
         if path is None:
-            self.packages_path_label.setText("Cobaya packages path: unavailable")
+            self.packages_path_edit.clear()
+            self.packages_path_edit.setToolTip("Cobaya packages path unavailable.")
             return
-        self.packages_path_label.setText(f"Cobaya packages path: {path}")
+        text = str(path)
+        self.packages_path_edit.setText(text)
+        self.packages_path_edit.setCursorPosition(0)
+        self.packages_path_edit.setToolTip(text)
 
     def set_conflict_message(self, message: str) -> None:
         self.conflict_message.setPlainText(message)

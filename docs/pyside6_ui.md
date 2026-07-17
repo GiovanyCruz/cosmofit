@@ -42,6 +42,9 @@ large main-window minimum:
   containers with `widgetResizable=True`;
 - the `Parameters` and posterior summary tables use interactive headers and
   horizontal scrollbars instead of stretching every column to the window width;
+- the `Parameters` table keeps raw editable display labels in the `Label`
+  column and renders a compact MathText `Preview` in its own column so row
+  height stays stable at small window sizes;
 - the `Results` page uses responsive action grids, scrollable metadata content,
   a scrollable content area, a resizable splitter layout, and a scaled PNG
   preview that preserves the original export files;
@@ -92,7 +95,9 @@ It does not store generated chains or other run artifacts.
 - There is no progress monitoring or background execution yet.
 - Results loading, GetDist plots, and summary tables are not implemented in
   this milestone snapshot.
-- `use_abs_mag` remains fixed to `false`.
+- supernova likelihoods keep Cobaya's default `use_abs_mag: false` behavior,
+  which marginalizes over the absolute-magnitude calibration internally
+  instead of sampling an explicit `Mb` parameter.
 - The current chronometer example points to the repository fixture CSV.
 
 ## Next milestone

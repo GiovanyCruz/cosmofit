@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QFileDialog
 
 from cosmofit.analysis.errors import RunNotSuccessfulError
@@ -219,6 +221,104 @@ def test_results_widget_preview_shrinks_before_actions_collapse(
         widget.plot_preview_label.pixmap().height()
         <= widget.plot_scroll.viewport().height()
     )
+    widget.close()
+    app.processEvents()
+    controller.shutdown()
+
+
+def test_results_widget_plot_buttons_refresh_immediately_without_focus_change(
+    tmp_path: Path,
+) -> None:
+    app = QApplication.instance() or QApplication([])
+    controller = ResultsController(
+        service_factory=lambda: FakePosteriorResultsService(tmp_path)
+    )
+    widget = ResultsWidget(controller=controller)
+    widget.show()
+    widget.load_run_from_path(tmp_path / "completed-run")
+    _spin_until(lambda: widget.parameter_list.count() == 2, app)
+
+    widget.parameter_list.setFocus()
+    widget.parameter_list.item(0).setSelected(True)
+    app.processEvents()
+
+    assert widget.focusWidget() is widget.parameter_list
+    assert widget.plot_1d_button.isEnabled() is True
+    assert widget.plot_2d_button.isEnabled() is False
+    assert widget.triangle_plot_button.isEnabled() is False
+
+    widget.parameter_list.item(1).setSelected(True)
+    app.processEvents()
+
+    assert widget.focusWidget() is widget.parameter_list
+    assert widget.plot_1d_button.isEnabled() is False
+    assert widget.plot_2d_button.isEnabled() is True
+    assert widget.triangle_plot_button.isEnabled() is True
+
+    widget.parameter_list.item(1).setSelected(False)
+    app.processEvents()
+
+    assert widget.focusWidget() is widget.parameter_list
+    assert widget.plot_1d_button.isEnabled() is True
+    assert widget.plot_2d_button.isEnabled() is False
+    assert widget.triangle_plot_button.isEnabled() is False
+
+    widget.parameter_list.clearSelection()
+    app.processEvents()
+
+    assert widget.plot_1d_button.isEnabled() is False
+    assert widget.plot_2d_button.isEnabled() is False
+    assert widget.triangle_plot_button.isEnabled() is False
+    widget.close()
+    app.processEvents()
+    controller.shutdown()
+
+
+def test_results_widget_keyboard_selection_updates_plot_buttons_immediately(
+    tmp_path: Path,
+) -> None:
+    app = QApplication.instance() or QApplication([])
+    controller = ResultsController(
+        service_factory=lambda: FakePosteriorResultsService(tmp_path)
+    )
+    widget = ResultsWidget(controller=controller)
+    widget.show()
+    widget.load_run_from_path(tmp_path / "completed-run")
+    _spin_until(lambda: widget.parameter_list.count() == 2, app)
+
+    widget.parameter_list.setFocus()
+    widget.parameter_list.setCurrentRow(0)
+    QTest.keyClick(widget.parameter_list, Qt.Key.Key_Space)
+    app.processEvents()
+
+    assert widget.focusWidget() is widget.parameter_list
+    assert widget.plot_1d_button.isEnabled() is True
+    assert widget.plot_2d_button.isEnabled() is False
+    assert widget.triangle_plot_button.isEnabled() is False
+
+    QTest.keyClick(
+        widget.parameter_list,
+        Qt.Key.Key_Down,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    app.processEvents()
+
+    assert widget.focusWidget() is widget.parameter_list
+    assert widget.plot_1d_button.isEnabled() is False
+    assert widget.plot_2d_button.isEnabled() is True
+    assert widget.triangle_plot_button.isEnabled() is True
+
+    QTest.keyClick(
+        widget.parameter_list,
+        Qt.Key.Key_Up,
+        Qt.KeyboardModifier.ShiftModifier,
+    )
+    app.processEvents()
+
+    assert widget.focusWidget() is widget.parameter_list
+    assert widget.plot_1d_button.isEnabled() is True
+    assert widget.plot_2d_button.isEnabled() is False
+    assert widget.triangle_plot_button.isEnabled() is False
     widget.close()
     app.processEvents()
     controller.shutdown()

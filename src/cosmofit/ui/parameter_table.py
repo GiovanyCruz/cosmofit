@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QPalette, QPixmap
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
     QCheckBox,
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -34,67 +35,95 @@ _MATH_TEXT_EXAMPLES = "\n".join(
 )
 
 
-class MathTextPreviewField(QWidget):
-    """Line edit plus a small MathText preview rendered outside the UI layer."""
+class MathTextPreviewCell(QFrame):
+    """Compact rendered preview cell for plain labels or MathText."""
 
-    def __init__(self, *, field_name: str, text: str = "") -> None:
+    _HEIGHT = 28
+
+    def __init__(self, *, field_name: str, edit: QLineEdit) -> None:
         super().__init__()
         self._field_name = field_name
+        self._edit = edit
         self._service = MathTextService()
+        self._source_pixmap = QPixmap()
 
-        self.line_edit = QLineEdit(text)
-        self.line_edit.setToolTip(_MATH_TEXT_EXAMPLES)
-        self.preview_label = QLabel("Preview unavailable.")
-        self.preview_label.setWordWrap(True)
-        self.preview_label.setMinimumHeight(24)
+        self.preview_label = QLabel()
+        self.preview_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        self.preview_label.setWordWrap(False)
         self.preview_label.setToolTip(_MATH_TEXT_EXAMPLES)
+        self.setAutoFillBackground(True)
+        palette = self.palette()
+        palette.setColor(
+            QPalette.ColorRole.Window,
+            palette.color(QPalette.ColorRole.Base),
+        )
+        self.setPalette(palette)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setFrameShadow(QFrame.Shadow.Plain)
+        self.setLineWidth(1)
+        self.setMinimumHeight(self._HEIGHT)
+        self.setMaximumHeight(self._HEIGHT)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
-        layout.addWidget(self.line_edit)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 2, 6, 2)
         layout.addWidget(self.preview_label)
 
-        self.line_edit.textChanged.connect(self._refresh_preview)
-        self._refresh_preview(self.line_edit.text())
+        self._edit.textChanged.connect(self.refresh_preview)
+        self.refresh_preview(self._edit.text())
 
-    def text(self) -> str:
-        return self.line_edit.text()
+    def sizeHint(self) -> QSize:  # type: ignore[override]
+        return QSize(140, self._HEIGHT)
 
-    def setText(self, text: str) -> None:
-        self.line_edit.setText(text)
+    def minimumSizeHint(self) -> QSize:  # type: ignore[override]
+        return QSize(96, self._HEIGHT)
 
-    def setEnabled(self, enabled: bool) -> None:  # type: ignore[override]
-        super().setEnabled(enabled)
-        self.line_edit.setEnabled(enabled)
-        self.preview_label.setEnabled(enabled)
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._apply_scaled_pixmap()
 
-    def _refresh_preview(self, text: str) -> None:
+    def refresh_preview(self, text: str) -> None:
         if not text.strip():
+            self._source_pixmap = QPixmap()
             self.preview_label.setPixmap(QPixmap())
-            self.preview_label.setStyleSheet("")
-            self.preview_label.setText("Plain text or MathText preview.")
+            self.preview_label.setStyleSheet("color: palette(text);")
+            self.preview_label.setText("")
             return
 
         try:
             preview = self._service.render_preview(text, field_name=self._field_name)
         except ValueError as error:
+            self._source_pixmap = QPixmap()
             self.preview_label.setPixmap(QPixmap())
             self.preview_label.setStyleSheet("color: #9b1c1c;")
             self.preview_label.setText("Invalid MathText.")
             self.preview_label.setToolTip(f"{_MATH_TEXT_EXAMPLES}\n\n{error}")
             return
 
-        self.preview_label.setStyleSheet("")
+        self.preview_label.setStyleSheet("color: palette(text);")
         self.preview_label.setToolTip(_MATH_TEXT_EXAMPLES)
         if preview is None:
+            self._source_pixmap = QPixmap()
             self.preview_label.setPixmap(QPixmap())
-            self.preview_label.setText("Plain text or MathText preview.")
+            self.preview_label.setText(text)
             return
         pixmap = QPixmap()
         pixmap.loadFromData(preview.png_bytes)
-        self.preview_label.setPixmap(pixmap)
+        self._source_pixmap = pixmap
+        self._apply_scaled_pixmap()
         self.preview_label.setText("")
+
+    def _apply_scaled_pixmap(self) -> None:
+        if self._source_pixmap.isNull():
+            return
+        scaled = self._source_pixmap.scaled(
+            max(self.preview_label.width(), 1),
+            max(self._HEIGHT - 8, 1),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.preview_label.setPixmap(scaled)
 
 
 class ParameterTableWidget(QWidget):
@@ -102,23 +131,25 @@ class ParameterTableWidget(QWidget):
 
     COLUMN_NAME = 0
     COLUMN_LABEL = 1
-    COLUMN_ROLE = 2
-    COLUMN_PRIOR_MIN = 3
-    COLUMN_PRIOR_MAX = 4
-    COLUMN_REFERENCE = 5
-    COLUMN_PROPOSAL = 6
-    COLUMN_FIXED_VALUE = 7
-    COLUMN_UNIT = 8
-    COLUMN_NUISANCE = 9
+    COLUMN_PREVIEW = 2
+    COLUMN_ROLE = 3
+    COLUMN_PRIOR_MIN = 4
+    COLUMN_PRIOR_MAX = 5
+    COLUMN_REFERENCE = 6
+    COLUMN_PROPOSAL = 7
+    COLUMN_FIXED_VALUE = 8
+    COLUMN_UNIT = 9
+    COLUMN_NUISANCE = 10
 
     def __init__(self) -> None:
         super().__init__()
 
-        self.table = QTableWidget(0, 10)
+        self.table = QTableWidget(0, 11)
         self.table.setHorizontalHeaderLabels(
             [
                 "Name",
                 "Label",
+                "Preview",
                 "Role",
                 "Prior min",
                 "Prior max",
@@ -144,6 +175,7 @@ class ParameterTableWidget(QWidget):
         self.table.horizontalHeader().setDefaultSectionSize(120)
         self.table.horizontalHeader().setStretchLastSection(False)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(32)
 
         self.add_button = QPushButton("Add parameter")
         self.remove_button = QPushButton("Remove selected parameter")
@@ -164,9 +196,11 @@ class ParameterTableWidget(QWidget):
         self.table.insertRow(row)
 
         name_edit = QLineEdit(state.get("name", "") if state else "")
-        label_edit = MathTextPreviewField(
+        label_edit = QLineEdit(state.get("label", "") if state else "")
+        label_edit.setToolTip(_MATH_TEXT_EXAMPLES)
+        preview = MathTextPreviewCell(
             field_name="parameter display label",
-            text=state.get("label", "") if state else "",
+            edit=label_edit,
         )
         role_box = QComboBox()
         role_box.addItems(["sampled", "fixed"])
@@ -185,6 +219,7 @@ class ParameterTableWidget(QWidget):
 
         self.table.setCellWidget(row, self.COLUMN_NAME, name_edit)
         self.table.setCellWidget(row, self.COLUMN_LABEL, label_edit)
+        self.table.setCellWidget(row, self.COLUMN_PREVIEW, preview)
         self.table.setCellWidget(row, self.COLUMN_ROLE, role_box)
         self.table.setCellWidget(row, self.COLUMN_PRIOR_MIN, prior_min_edit)
         self.table.setCellWidget(row, self.COLUMN_PRIOR_MAX, prior_max_edit)
@@ -193,6 +228,13 @@ class ParameterTableWidget(QWidget):
         self.table.setCellWidget(row, self.COLUMN_FIXED_VALUE, fixed_value_edit)
         self.table.setCellWidget(row, self.COLUMN_UNIT, unit_edit)
         self.table.setCellWidget(row, self.COLUMN_NUISANCE, nuisance_box)
+        row_height = max(
+            name_edit.sizeHint().height(),
+            label_edit.sizeHint().height(),
+            preview.sizeHint().height(),
+            role_box.sizeHint().height(),
+        )
+        self.table.setRowHeight(row, row_height + 4)
 
         role_box.currentTextChanged.connect(
             lambda _value, target=role_box: self._update_role_widgets_for_box(target)
@@ -210,7 +252,7 @@ class ParameterTableWidget(QWidget):
             rows.append(
                 {
                     "name": self._line_edit(row, self.COLUMN_NAME).text(),
-                    "label": self._label_field(row).text(),
+                    "label": self._label_edit(row).text(),
                     "role": self._role_box(row).currentText(),
                     "prior_min": self._line_edit(row, self.COLUMN_PRIOR_MIN).text(),
                     "prior_max": self._line_edit(row, self.COLUMN_PRIOR_MAX).text(),
@@ -258,9 +300,9 @@ class ParameterTableWidget(QWidget):
         assert isinstance(widget, QLineEdit)
         return widget
 
-    def _label_field(self, row: int) -> MathTextPreviewField:
+    def _label_edit(self, row: int) -> QLineEdit:
         widget = self.table.cellWidget(row, self.COLUMN_LABEL)
-        assert isinstance(widget, MathTextPreviewField)
+        assert isinstance(widget, QLineEdit)
         return widget
 
     def _role_box(self, row: int) -> QComboBox:

@@ -184,6 +184,8 @@ class ResultsWidget(QWidget):
         self._loaded_results: LoadedPosteriorResults | None = None
         self._current_plot: PosteriorPlotArtifact | None = None
         self._options_dirty = False
+        self._selection_refresh_queued = False
+        self._list_signals_wired = False
         self.results_controller = controller or ResultsController(parent=self)
 
         self.state_label = QLabel(f"State: {STATE_NO_RUN_LOADED}")
@@ -244,9 +246,9 @@ class ResultsWidget(QWidget):
         self.clear_selection_button = QPushButton("Clear selection")
         self.invert_selection_button = QPushButton("Invert selection")
 
-        self.plot_1d_button = QPushButton("Plot 1D")
-        self.plot_2d_button = QPushButton("Plot 2D")
-        self.triangle_plot_button = QPushButton("Triangle plot")
+        self.plot_1d_button = QPushButton("Generate 1D")
+        self.plot_2d_button = QPushButton("Generate 2D")
+        self.triangle_plot_button = QPushButton("Generate triangle")
         self.export_summary_json_button = QPushButton("Export summary JSON")
         self.export_summary_csv_button = QPushButton("Export summary CSV")
         self.save_plot_png_button = QPushButton("Save current plot as PNG")
@@ -323,7 +325,7 @@ class ResultsWidget(QWidget):
         self._build_layout()
         self._wire_signals()
         self._apply_results_enabled(False)
-        self._refresh_plot_buttons()
+        self._refresh_action_state()
 
     def append_log_line(self, stream: str, line: str) -> None:
         prefix = "[stderr] " if stream == "stderr" else ""
@@ -391,7 +393,7 @@ class ResultsWidget(QWidget):
         self.sampled_count_value.setText("0")
         self.fixed_parameters_label.setText("Fixed parameters: n/a")
         self._apply_results_enabled(False)
-        self._refresh_plot_buttons()
+        self._refresh_action_state()
 
     def current_plot(self) -> PosteriorPlotArtifact | None:
         return self._current_plot
@@ -614,7 +616,7 @@ class ResultsWidget(QWidget):
         self.select_all_button.clicked.connect(self.parameter_list.selectAll)
         self.clear_selection_button.clicked.connect(self.parameter_list.clearSelection)
         self.invert_selection_button.clicked.connect(self._invert_selection)
-        self.parameter_list.itemSelectionChanged.connect(self._refresh_plot_buttons)
+        self._wire_parameter_list_signals()
         self.plot_1d_button.clicked.connect(lambda: self._request_plot("1d"))
         self.plot_2d_button.clicked.connect(lambda: self._request_plot("2d"))
         self.triangle_plot_button.clicked.connect(
@@ -695,7 +697,7 @@ class ResultsWidget(QWidget):
                 "Reload the results to apply Ignore initial fraction "
                 "or filled contours."
             )
-        self._refresh_plot_buttons()
+        self._refresh_action_state()
 
     def _invert_selection(self) -> None:
         for index in range(self.parameter_list.count()):
@@ -740,7 +742,7 @@ class ResultsWidget(QWidget):
         self._current_plot = None
         self.plot_preview_label.clear_preview("Preview unavailable.")
         self.plot_info_label.setText("No plot available.")
-        self._refresh_plot_buttons()
+        self._refresh_action_state()
 
     def _export_summary(self, export_format: str) -> None:
         if self._options_dirty:
@@ -818,7 +820,7 @@ class ResultsWidget(QWidget):
                 ]
             )
         )
-        self._refresh_plot_buttons()
+        self._refresh_action_state()
 
     def _handle_summary_exported(self, payload: object) -> None:
         artifact = payload
@@ -849,7 +851,7 @@ class ResultsWidget(QWidget):
         self.legend_label_edit.setEnabled(enabled)
         self.filled_contours_checkbox.setEnabled(True)
         self._refresh_export_buttons(enabled)
-        self._refresh_plot_buttons()
+        self._refresh_action_state()
 
     def _refresh_export_buttons(self, enabled: bool) -> None:
         is_busy = self.results_controller.is_busy()
@@ -938,7 +940,7 @@ class ResultsWidget(QWidget):
                 column, min(max(width, 84), 120)
             )
 
-    def _refresh_plot_buttons(self) -> None:
+    def _refresh_action_state(self) -> None:
         selected_count = len(self.selected_parameters())
         busy = self.results_controller.is_busy()
         has_results = self._loaded_results is not None
@@ -995,7 +997,38 @@ class ResultsWidget(QWidget):
         self.invert_selection_button.setEnabled(
             not busy and self.parameter_list.count() > 0
         )
-        self._refresh_plot_buttons()
+        self._refresh_action_state()
+
+    def _wire_parameter_list_signals(self) -> None:
+        if self._list_signals_wired:
+            return
+        self._list_signals_wired = True
+        self.parameter_list.itemSelectionChanged.connect(self._refresh_action_state)
+        self.parameter_list.currentItemChanged.connect(
+            lambda _current, _previous: self._schedule_action_state_refresh()
+        )
+        self.parameter_list.selectionModel().selectionChanged.connect(
+            lambda _selected, _deselected: self._schedule_action_state_refresh()
+        )
+        self.parameter_list.model().rowsInserted.connect(
+            lambda *_args: self._schedule_action_state_refresh()
+        )
+        self.parameter_list.model().rowsRemoved.connect(
+            lambda *_args: self._schedule_action_state_refresh()
+        )
+        self.parameter_list.model().modelReset.connect(
+            self._schedule_action_state_refresh
+        )
+
+    def _schedule_action_state_refresh(self) -> None:
+        if self._selection_refresh_queued:
+            return
+        self._selection_refresh_queued = True
+        QTimer.singleShot(0, self._flush_action_state_refresh)
+
+    def _flush_action_state_refresh(self) -> None:
+        self._selection_refresh_queued = False
+        self._refresh_action_state()
 
     def _confirm_overwrite(self, path: Path) -> bool:
         answer = QMessageBox.question(

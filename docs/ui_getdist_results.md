@@ -51,9 +51,9 @@ The Results tab uses a multi-selection list of posterior parameters.
 
 Validation rules:
 
-- Select exactly one parameter for a `Plot 1D`.
-- Select exactly two parameters for a `Plot 2D`.
-- Select at least two parameters for a `Triangle plot`.
+- Select exactly one parameter for `Generate 1D`.
+- Select exactly two parameters for `Generate 2D`.
+- Select at least two parameters for `Generate triangle`.
 
 Displayed order follows the analysis metadata order. Derived parameters stay in
 the summary table and are marked as derived, but fixed parameters are not
@@ -110,7 +110,8 @@ Supported editable fields:
 Preview behavior:
 
 - the Results tab renders small title and legend previews under each field;
-- the Parameters tab renders a small preview under each display-label edit;
+- the Parameters tab keeps a plain editable `Label` column and a separate
+  compact `Preview` column for rendered plain text or MathText;
 - previews use the same Matplotlib MathText engine as final plot exports.
 
 Example labels:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QApplication, QWidget
 
 from cosmofit.ui.main_window import MainWindow
@@ -112,6 +113,98 @@ def test_tables_scroll_instead_of_expanding_window(tmp_path: Path) -> None:
     app.processEvents()
 
 
+def test_parameter_label_preview_uses_separate_column_without_row_overlap() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = _build_window()
+    window.resize(800, 600)
+    window.parameter_table.set_parameters_state(
+        [
+            {
+                "name": "H0",
+                "label": "H0",
+                "role": "sampled",
+                "prior_min": "50",
+                "prior_max": "90",
+                "reference": "70",
+                "proposal": "1",
+                "fixed_value": "",
+                "unit": "km/s/Mpc",
+                "nuisance": False,
+            },
+            {
+                "name": "Om",
+                "label": r"$\Omega_m$",
+                "role": "sampled",
+                "prior_min": "0.1",
+                "prior_max": "0.5",
+                "reference": "0.3",
+                "proposal": "0.01",
+                "fixed_value": "",
+                "unit": "",
+                "nuisance": False,
+            },
+            {
+                "name": "bad",
+                "label": r"$\Omega_m",
+                "role": "sampled",
+                "prior_min": "0.1",
+                "prior_max": "0.5",
+                "reference": "0.3",
+                "proposal": "0.01",
+                "fixed_value": "",
+                "unit": "",
+                "nuisance": False,
+            },
+        ]
+    )
+    window.tabs.setCurrentWidget(window.parameter_table)
+    app.processEvents()
+
+    table = window.parameter_table.table
+    preview_column = window.parameter_table.COLUMN_PREVIEW
+    plain_preview = table.cellWidget(0, preview_column)
+    math_preview = table.cellWidget(1, preview_column)
+    invalid_preview = table.cellWidget(2, preview_column)
+
+    assert table.horizontalHeaderItem(preview_column).text() == "Preview"
+    assert table.cellWidget(0, window.parameter_table.COLUMN_LABEL) is not plain_preview
+    assert table.rowHeight(0) <= 40
+    assert plain_preview is not None
+    assert math_preview is not None
+    assert invalid_preview is not None
+    assert (
+        plain_preview.preview_label.text() == "H0"
+        or plain_preview.preview_label.pixmap() is not None
+    )
+    assert math_preview.preview_label.pixmap() is not None
+    assert invalid_preview.preview_label.text() == "Invalid MathText."
+
+    plain_rect = plain_preview.geometry()
+    next_row_top = table.visualRect(table.model().index(1, preview_column)).top()
+    assert plain_rect.bottom() < next_row_top
+
+    table.selectRow(1)
+    app.processEvents()
+    highlight_color = table.palette().color(table.foregroundRole())
+    assert math_preview.autoFillBackground() is True
+    assert (
+        math_preview.palette().color(math_preview.backgroundRole())
+        != highlight_color
+    )
+
+    window.resize(640, 480)
+    app.processEvents()
+    math_rect = math_preview.geometry()
+    math_cell_rect = table.visualRect(table.model().index(1, preview_column))
+    assert math_rect.height() <= table.rowHeight(1)
+    assert math_rect.top() >= math_cell_rect.top()
+    assert math_rect.bottom() <= math_cell_rect.bottom()
+    assert table.horizontalScrollBar().maximum() >= 0
+    assert table.verticalScrollBar().maximum() >= 0
+    window.close()
+    app.processEvents()
+
+
 def test_results_page_overflow_uses_scrollbars_at_small_size(tmp_path: Path) -> None:
     app = QApplication.instance() or QApplication([])
     controller = ResultsController(
@@ -134,6 +227,37 @@ def test_results_page_overflow_uses_scrollbars_at_small_size(tmp_path: Path) -> 
         == "ScrollBarAsNeeded"
     )
     controller.shutdown()
+    window.close()
+    app.processEvents()
+
+
+def test_datasets_page_wraps_supernova_note_and_long_packages_path() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = _build_window()
+    window.resize(800, 600)
+    long_path = Path("/tmp/cosmofit/cobaya/packages/with/a/very/long/path/for/layout")
+    window.datasets_widget.set_packages_path(long_path)
+    window.tabs.setCurrentWidget(window.datasets_widget)
+    app.processEvents()
+
+    note = window.datasets_widget.use_abs_mag_label
+    packages = window.datasets_widget.packages_path_edit
+    note_origin = note.mapToGlobal(QPoint(0, 0))
+    packages_origin = packages.mapToGlobal(QPoint(0, 0))
+
+    assert "use_abs_mag" not in note.text()
+    assert "absolute-magnitude" in note.text()
+    assert note.wordWrap() is True
+    assert (
+        note.alignment()
+        == Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+    )
+    assert note.sizePolicy().verticalPolicy().name == "Preferred"
+    assert packages.isReadOnly() is True
+    assert packages.text() == str(long_path)
+    assert packages.toolTip() == str(long_path)
+    assert note_origin.y() + note.height() <= packages_origin.y()
+    assert window.datasets_widget.scroll_area.widgetResizable() is True
     window.close()
     app.processEvents()
 
