@@ -9,6 +9,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 import yaml
+from getdist import plots
+from matplotlib.axes import Axes
+from matplotlib.legend import Legend
 
 from cosmofit.analysis import (
     AnalysisPlotSelectionError,
@@ -22,6 +25,11 @@ from cosmofit.analysis import (
 from cosmofit.analysis.mathtext import (
     is_matplotlib_usetex_enabled,
     validate_mathtext,
+)
+from cosmofit.analysis.service import (
+    _apply_plot_axis_labels,
+    _finalize_plot_layout,
+    _scientific_axes,
 )
 from cosmofit.application import (
     CosmicChronometerDatasetConfig,
@@ -283,6 +291,136 @@ def test_triangle_plot_supports_five_parameters_and_selected_order(
     assert plot_paths.png_path.is_file()
     assert plot_paths.pdf_path.is_file()
     assert plot_paths.png_path.name == "triangle_q4_q1_q5_q2_q3.png"
+
+
+def test_triangle_plot_uses_figure_level_suptitle_and_reserved_top_margin(
+    tmp_path: Path,
+) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om", "w0"))
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    plotter = _render_plot_for_layout(
+        service,
+        kind="triangle",
+        parameters=("H0", "Om", "w0"),
+        title="Ejemplo",
+        legend_label=None,
+    )
+
+    try:
+        assert plotter.fig._suptitle is not None
+        assert plotter.fig._suptitle.get_text() == "Ejemplo"
+        assert plotter.fig.subplotpars.top < 0.93
+        assert _axes_with_title(plotter, "Ejemplo") == []
+        _assert_suptitle_does_not_overlap_top_row_axes(plotter)
+    finally:
+        plotter.fig.clear()
+
+
+def test_triangle_plot_legend_is_figure_level_outside_scientific_axes(
+    tmp_path: Path,
+) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om", "w0"))
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    plotter = _render_plot_for_layout(
+        service,
+        kind="triangle",
+        parameters=("H0", "Om", "w0"),
+        title="Ejemplo",
+        legend_label="Prueba",
+    )
+
+    try:
+        legends = _figure_legends(plotter)
+        assert len(legends) == 1
+        assert legends[0].get_texts()[0].get_text() == "Prueba"
+        assert _axes_legends(plotter) == []
+        _assert_legend_does_not_overlap_triangle_axes(plotter)
+        _assert_legend_does_not_overlap_lower_right_diagonal_axis(plotter)
+    finally:
+        plotter.fig.clear()
+
+
+def test_triangle_plot_omits_empty_legend_label_cleanly(tmp_path: Path) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om"))
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    plotter = _render_plot_for_layout(
+        service,
+        kind="triangle",
+        parameters=("H0", "Om"),
+        title="Ejemplo",
+        legend_label=None,
+    )
+
+    try:
+        assert _figure_legends(plotter) == []
+        assert _axes_legends(plotter) == []
+    finally:
+        plotter.fig.clear()
+
+
+def test_triangle_plot_supports_mathtext_title_and_legend_without_overlap(
+    tmp_path: Path,
+) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om", "w0"))
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    plotter = _render_plot_for_layout(
+        service,
+        kind="triangle",
+        parameters=("H0", "Om", "w0"),
+        title=r"Posterior for $\Lambda$CDM",
+        legend_label=r"$\Lambda$CDM",
+    )
+
+    try:
+        assert plotter.fig._suptitle is not None
+        assert plotter.fig._suptitle.get_text() == r"Posterior for $\Lambda$CDM"
+        legends = _figure_legends(plotter)
+        assert len(legends) == 1
+        assert legends[0].get_texts()[0].get_text() == r"$\Lambda$CDM"
+        _assert_suptitle_does_not_overlap_top_row_axes(plotter)
+        _assert_legend_does_not_overlap_triangle_axes(plotter)
+    finally:
+        plotter.fig.clear()
+
+
+def test_1d_and_2d_titles_remain_figure_level_without_regression(
+    tmp_path: Path,
+) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om"))
+    service = PosteriorAnalysisService()
+    service.open_run(run_directory)
+
+    plotter_1d = _render_plot_for_layout(
+        service,
+        kind="1d",
+        parameters=("H0",),
+        title="Ejemplo",
+        legend_label="Prueba",
+    )
+    plotter_2d = _render_plot_for_layout(
+        service,
+        kind="2d",
+        parameters=("H0", "Om"),
+        title=r"Posterior for $\Lambda$CDM",
+        legend_label=r"$\Lambda$CDM",
+    )
+
+    try:
+        assert plotter_1d.fig._suptitle is not None
+        assert _axes_with_title(plotter_1d, "Ejemplo") == []
+        assert plotter_2d.fig._suptitle is not None
+        assert _axes_with_title(plotter_2d, r"Posterior for $\Lambda$CDM") == []
+    finally:
+        plotter_1d.fig.clear()
+        plotter_2d.fig.clear()
 
 
 def test_duplicate_parameter_selection_is_rejected(tmp_path: Path) -> None:
@@ -606,6 +744,108 @@ def create_run_fixture(
             )
 
     return run_directory
+
+
+def _render_plot_for_layout(
+    service: PosteriorAnalysisService,
+    *,
+    kind: str,
+    parameters: tuple[str, ...],
+    title: str | None,
+    legend_label: str | None,
+):
+    plotter = plots.get_subplot_plotter()
+    if kind == "1d":
+        plotter.plot_1d(service._samples, parameters[0])  # noqa: SLF001
+    elif kind == "2d":
+        plotter.plot_2d(
+            service._samples,  # noqa: SLF001
+            parameters[0],
+            parameters[1],
+            filled=True,
+        )
+    else:
+        plotter.triangle_plot(
+            service._samples,  # noqa: SLF001
+            list(parameters),
+            filled=True,
+        )
+    _apply_plot_axis_labels(
+        plotter,
+        run_analysis=service._require_run_analysis(),  # noqa: SLF001
+        selected_symbols=parameters,
+    )
+    _finalize_plot_layout(
+        plotter,
+        plot_kind=kind,
+        title=title,
+        legend_label=legend_label,
+    )
+    plotter.fig.canvas.draw()
+    return plotter
+
+
+def _figure_legends(plotter) -> list[Legend]:
+    return list(plotter.fig.legends)
+
+
+def _axes_legends(plotter) -> list[Legend]:
+    legends: list[Legend] = []
+    for axis in _scientific_axes(plotter):
+        legend = axis.get_legend()
+        if legend is not None:
+            legends.append(legend)
+    return legends
+
+
+def _axes_with_title(plotter, title: str) -> list[Axes]:
+    return [axis for axis in _scientific_axes(plotter) if axis.get_title() == title]
+
+
+def _assert_suptitle_does_not_overlap_top_row_axes(plotter) -> None:
+    suptitle = plotter.fig._suptitle
+    assert suptitle is not None
+    renderer = plotter.fig.canvas.get_renderer()
+    title_bbox = suptitle.get_window_extent(renderer)
+    for axis in _top_row_axes(plotter):
+        assert not title_bbox.overlaps(axis.get_window_extent(renderer))
+
+
+def _assert_legend_does_not_overlap_triangle_axes(plotter) -> None:
+    legends = _figure_legends(plotter)
+    assert len(legends) == 1
+    renderer = plotter.fig.canvas.get_renderer()
+    legend_bbox = legends[0].get_window_extent(renderer)
+    for axis in _scientific_axes(plotter):
+        assert not legend_bbox.overlaps(axis.get_window_extent(renderer))
+
+
+def _assert_legend_does_not_overlap_lower_right_diagonal_axis(plotter) -> None:
+    legends = _figure_legends(plotter)
+    assert len(legends) == 1
+    renderer = plotter.fig.canvas.get_renderer()
+    legend_bbox = legends[0].get_window_extent(renderer)
+    assert not legend_bbox.overlaps(
+        _lower_right_diagonal_axis(plotter).get_window_extent(renderer)
+    )
+
+
+def _top_row_axes(plotter) -> list[Axes]:
+    scientific_axes = _scientific_axes(plotter)
+    renderer = plotter.fig.canvas.get_renderer()
+    max_top = max(axis.get_window_extent(renderer).y1 for axis in scientific_axes)
+    return [
+        axis
+        for axis in scientific_axes
+        if abs(axis.get_window_extent(renderer).y1 - max_top) < 1.0
+    ]
+
+
+def _lower_right_diagonal_axis(plotter) -> Axes:
+    subplots = np.asarray(plotter.subplots, dtype=object)
+    axis = subplots[-1, -1]
+    assert isinstance(axis, Axes)
+    return axis
 
 
 def build_chain_rows(

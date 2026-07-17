@@ -18,6 +18,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from getdist import loadMCSamples, plots
+from matplotlib.artist import Artist
+from matplotlib.axes import Axes
+from matplotlib.legend import Legend
+from matplotlib.text import Text
 
 from cosmofit.analysis.errors import (
     AnalysisPlotSelectionError,
@@ -203,6 +207,7 @@ class PosteriorAnalysisService:
         symbol = self._validate_selection([parameter], expected_count=1)[0]
         return self._export_plot(
             name=_plot_name("1d", (symbol,)),
+            plot_kind="1d",
             confidence_levels=confidence_levels,
             render=lambda plotter: plotter.plot_1d(self._samples, symbol),
             selected_symbols=(symbol,),
@@ -224,6 +229,7 @@ class PosteriorAnalysisService:
         symbols = self._validate_selection([parameter_x, parameter_y], expected_count=2)
         return self._export_plot(
             name=_plot_name("2d", symbols),
+            plot_kind="2d",
             confidence_levels=confidence_levels,
             render=lambda plotter: plotter.plot_2d(
                 self._samples,
@@ -249,6 +255,7 @@ class PosteriorAnalysisService:
         symbols = self._validate_selection(parameters)
         return self._export_plot(
             name=_plot_name("triangle", symbols),
+            plot_kind="triangle",
             confidence_levels=confidence_levels,
             render=lambda plotter: plotter.triangle_plot(
                 self._samples,
@@ -385,6 +392,7 @@ class PosteriorAnalysisService:
         self,
         *,
         name: str,
+        plot_kind: str,
         confidence_levels: tuple[float, ...],
         render: Any,
         selected_symbols: tuple[str, ...],
@@ -412,10 +420,12 @@ class PosteriorAnalysisService:
                 run_analysis=run_analysis,
                 selected_symbols=selected_symbols,
             )
-            if legend_label:
-                plotter.add_legend([legend_label])
-            if title:
-                plotter.fig.suptitle(title)
+            _finalize_plot_layout(
+                plotter,
+                plot_kind=plot_kind,
+                title=title,
+                legend_label=legend_label,
+            )
             with (
                 _temporary_output_path(png_path) as temporary_png_path,
                 _temporary_output_path(pdf_path) as temporary_pdf_path,
@@ -519,6 +529,228 @@ def _apply_plot_axis_labels(
             axis.set_xlabel(replacement_x)
         if replacement_y is not None:
             axis.set_ylabel(replacement_y)
+
+
+def _finalize_plot_layout(
+    plotter: Any,
+    *,
+    plot_kind: str,
+    title: str | None,
+    legend_label: str | None,
+) -> None:
+    fig = plotter.fig
+    _clear_existing_legends(fig)
+    plotter.legend = None
+    plotter.extra_artists = []
+
+    scientific_axes = _scientific_axes(plotter)
+    if not scientific_axes:
+        if title:
+            plotter.extra_artists.append(
+                fig.suptitle(title, x=0.5, y=0.98, ha="center", wrap=True)
+            )
+        return
+
+    top = 0.97
+    right = 0.97
+    if title:
+        top = 0.82 if plot_kind == "triangle" else 0.9
+    if plot_kind == "triangle" and legend_label:
+        right = 0.78
+    _resize_figure_to_preserve_axes_area(fig, top=top, right=right)
+    if hasattr(fig, "subplots_adjust"):
+        fig.subplots_adjust(top=top, right=right)
+    _fit_axes_in_rect(scientific_axes, top=top, right=right)
+
+    extra_artists: list[Artist] = []
+    title_artist: Text | None = None
+    legend_artist: Legend | None = None
+    if title:
+        title_artist = fig.suptitle(title, x=0.5, y=0.98, ha="center", wrap=True)
+        extra_artists.append(title_artist)
+
+    if plot_kind == "triangle" and legend_label:
+        legend_artist = plotter.add_legend(
+            [legend_label],
+            figure=True,
+            legend_loc="upper right",
+            figure_legend_outside=False,
+            bbox_to_anchor=(0.985, 0.94 if title else 0.98),
+            bbox_transform=fig.transFigure,
+            borderaxespad=0.0,
+            legend_ncol=1,
+        )
+        extra_artists.append(legend_artist)
+    elif legend_label:
+        legend_artist = plotter.add_legend([legend_label])
+        extra_artists.append(legend_artist)
+
+    plotter.extra_artists = extra_artists
+    _resolve_plot_layout_overlaps(
+        plotter,
+        plot_kind=plot_kind,
+        title_artist=title_artist,
+        legend_artist=legend_artist,
+    )
+
+
+def _resize_figure_to_preserve_axes_area(fig: Any, *, top: float, right: float) -> None:
+    if not hasattr(fig, "subplotpars") or not hasattr(fig, "get_size_inches"):
+        return
+    subplotpars = fig.subplotpars
+    original_width, original_height = fig.get_size_inches()
+    width_scale = 1.0
+    height_scale = 1.0
+    if right < subplotpars.right and right > subplotpars.left:
+        width_scale = (subplotpars.right - subplotpars.left) / (
+            right - subplotpars.left
+        )
+    if top < subplotpars.top and top > subplotpars.bottom:
+        height_scale = (subplotpars.top - subplotpars.bottom) / (
+            top - subplotpars.bottom
+        )
+    fig.set_size_inches(
+        original_width * width_scale,
+        original_height * height_scale,
+        forward=True,
+    )
+
+
+def _resolve_plot_layout_overlaps(
+    plotter: Any,
+    *,
+    plot_kind: str,
+    title_artist: Text | None,
+    legend_artist: Legend | None,
+) -> None:
+    fig = plotter.fig
+    if not hasattr(fig, "canvas") or not hasattr(fig, "subplotpars"):
+        return
+    for _ in range(3):
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        scientific_axes = _scientific_axes(plotter)
+        if not scientific_axes:
+            return
+        updated = False
+        if title_artist is not None and _artist_overlaps_axes(
+            title_artist, scientific_axes, renderer
+        ):
+            figure_bbox = fig.get_window_extent(renderer)
+            title_bbox = title_artist.get_window_extent(renderer)
+            axes_top = max(
+                axis.get_window_extent(renderer).y1 for axis in scientific_axes
+            )
+            required_gap = max(12.0, figure_bbox.height * 0.015)
+            delta_fraction = (
+                axes_top - (title_bbox.y0 - required_gap)
+            ) / figure_bbox.height
+            top = max(0.68, fig.subplotpars.top - max(delta_fraction, 0.04))
+            _resize_figure_to_preserve_axes_area(
+                fig,
+                top=top,
+                right=fig.subplotpars.right,
+            )
+            fig.subplots_adjust(top=top)
+            _fit_axes_in_rect(
+                scientific_axes,
+                top=top,
+                right=fig.subplotpars.right,
+            )
+            updated = True
+        if (
+            plot_kind == "triangle"
+            and legend_artist is not None
+            and _artist_overlaps_axes(legend_artist, scientific_axes, renderer)
+        ):
+            figure_bbox = fig.get_window_extent(renderer)
+            legend_bbox = legend_artist.get_window_extent(renderer)
+            axes_right = max(
+                axis.get_window_extent(renderer).x1 for axis in scientific_axes
+            )
+            required_gap = max(12.0, figure_bbox.width * 0.015)
+            delta_fraction = (
+                axes_right - (legend_bbox.x0 - required_gap)
+            ) / figure_bbox.width
+            right = min(
+                fig.subplotpars.right - 0.04,
+                max(0.55, fig.subplotpars.right - max(delta_fraction, 0.05)),
+            )
+            _resize_figure_to_preserve_axes_area(
+                fig,
+                top=fig.subplotpars.top,
+                right=right,
+            )
+            fig.subplots_adjust(right=right)
+            _fit_axes_in_rect(
+                scientific_axes,
+                top=fig.subplotpars.top,
+                right=right,
+            )
+            updated = True
+        if not updated:
+            break
+    fig.canvas.draw()
+
+
+def _artist_overlaps_axes(
+    artist: Artist,
+    axes: tuple[Axes, ...],
+    renderer: Any,
+) -> bool:
+    artist_bbox = artist.get_window_extent(renderer)
+    return any(artist_bbox.overlaps(axis.get_window_extent(renderer)) for axis in axes)
+
+
+def _fit_axes_in_rect(axes: tuple[Axes, ...], *, top: float, right: float) -> None:
+    if not axes:
+        return
+    positions = [axis.get_position().frozen() for axis in axes]
+    min_left = min(position.x0 for position in positions)
+    min_bottom = min(position.y0 for position in positions)
+    max_right = max(position.x1 for position in positions)
+    max_top = max(position.y1 for position in positions)
+    current_width = max_right - min_left
+    current_height = max_top - min_bottom
+    target_width = right - min_left
+    target_height = top - min_bottom
+    if (
+        current_width <= 0
+        or current_height <= 0
+        or target_width <= 0
+        or target_height <= 0
+    ):
+        return
+    scale_x = target_width / current_width
+    scale_y = target_height / current_height
+    for axis, position in zip(axes, positions, strict=True):
+        axis.set_position(
+            [
+                min_left + (position.x0 - min_left) * scale_x,
+                min_bottom + (position.y0 - min_bottom) * scale_y,
+                position.width * scale_x,
+                position.height * scale_y,
+            ]
+        )
+
+
+def _clear_existing_legends(fig: Any) -> None:
+    for legend in tuple(getattr(fig, "legends", ())):
+        legend.remove()
+    for axis in getattr(fig, "axes", ()):
+        legend = axis.get_legend()
+        if legend is not None:
+            legend.remove()
+
+
+def _scientific_axes(plotter: Any) -> tuple[Axes, ...]:
+    subplots = getattr(plotter, "subplots", None)
+    if subplots is None:
+        return tuple(
+            axis for axis in getattr(plotter.fig, "axes", ()) if isinstance(axis, Axes)
+        )
+    flattened = np.asarray(subplots, dtype=object).ravel()
+    return tuple(axis for axis in flattened if isinstance(axis, Axes))
 
 
 def _label_lookup_key(label: str) -> str:

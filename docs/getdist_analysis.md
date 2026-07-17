@@ -99,6 +99,12 @@ Nothing is written back into `chains/`.
 - 2D plots show marginalized confidence contours for two sampled
   parameters.
 - Triangle plots combine 1D and 2D marginals for any selected subset.
+- User-provided plot titles are applied as figure-level suptitles for
+  1D, 2D, and triangle plots, with reserved top margin for preview,
+  PNG, and PDF exports.
+- Triangle legends are rendered as figure-level legends in reserved
+  whitespace outside the scientific axes so they do not cover diagonal
+  densities or contour panels.
 
 For many parameters, triangle plots preserve the requested order and
 scale naturally beyond two or three dimensions. This milestone does not

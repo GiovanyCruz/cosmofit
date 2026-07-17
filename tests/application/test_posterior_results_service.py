@@ -70,6 +70,33 @@ def test_generate_and_export_current_plot(tmp_path: Path) -> None:
     assert exported_pdf.is_file()
 
 
+def test_current_plot_and_exports_share_same_generated_plot_request(
+    tmp_path: Path,
+) -> None:
+    run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om", "w0"))
+    service = PosteriorResultsService()
+    service.load_run(run_directory, options=PosteriorResultsLoadOptions())
+
+    request = PosteriorPlotRequest(
+        kind="triangle",
+        parameters=("H0", "Om", "w0"),
+        confidence_levels=(0.68, 0.95),
+        title="Ejemplo",
+        legend_label="Prueba",
+    )
+    plot = service.generate_plot(request)
+    current_plot = service.current_plot()
+
+    assert current_plot is not None
+    assert current_plot.kind == request.kind
+    assert current_plot.parameters == request.parameters
+    assert current_plot.confidence_levels == request.confidence_levels
+    assert current_plot.title == request.title
+    assert current_plot.legend_label == request.legend_label
+    assert current_plot.export.png_path == plot.export.png_path
+    assert current_plot.export.pdf_path == plot.export.pdf_path
+
+
 def test_export_summary_formats_preserve_metadata(tmp_path: Path) -> None:
     run_directory = create_run_fixture(tmp_path, sampled_symbols=("H0", "Om"))
     service = PosteriorResultsService()
