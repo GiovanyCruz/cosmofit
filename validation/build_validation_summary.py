@@ -255,7 +255,10 @@ def write_markdown(results: list[ValidationResult]) -> None:
     lines = [
         "# CosmoFit validation summary",
         "",
-        "| Dataset | Parameter | CosmoFit | Direct reference | Mean difference | Separation |",
+        (
+    "| Dataset | Parameter | CosmoFit | Direct reference | "
+    "Mean difference | Separation |"
+),
         "|---|---:|---:|---:|---:|---:|",
     ]
 
