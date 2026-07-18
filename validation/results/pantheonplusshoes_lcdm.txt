@@ -1,0 +1,5 @@
+Om mean = 0.341094
+Om sigma = 0.018651
+68% = [0.322921, 0.359399]
+95% = [0.304401, 0.377940]
+Run directory: outputs/validation_pantheonplusshoes_lcdm/validation-pantheonplusshoes-lcdm-20260718T015725Z
