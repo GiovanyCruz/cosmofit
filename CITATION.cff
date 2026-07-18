@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use CosmoFit in your research, please cite the software and the associated publication."
+title: "CosmoFit"
+type: software
+version: 0.1.0
+date-released: 2026-07-18
+
+authors:
+  - family-names: "Cruz Huérfano"
+    given-names: "Giovany"
+
+abstract: >-
+  CosmoFit is a desktop graphical interface for background-level cosmological
+  parameter inference with Cobaya. It allows users to define an expansion
+  history H(z), configure model parameters and priors, select supported
+  cosmological datasets, execute MCMC analyses, and inspect posterior results
+  without directly writing Cobaya configuration files.
+
+keywords:
+  - cosmology
+  - Bayesian inference
+  - MCMC
+  - Cobaya
+  - supernovae
+  - cosmic chronometers
+  - graphical user interface
+  - scientific software
+
+license: MIT
+
+repository-code: "REPLACE_WITH_REPOSITORY_URL"
+url: "REPLACE_WITH_PROJECT_URL"
+
+preferred-citation:
+  type: article
+  title: "CosmoFit: A graphical interface for background cosmological inference with Cobaya"
+  authors:
+    - family-names: "Cruz Huérfano"
+      given-names: "Giovany"
+  year: 2026
+  journal: "Manuscript in preparation"
