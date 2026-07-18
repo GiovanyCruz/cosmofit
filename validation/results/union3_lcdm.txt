@@ -1,0 +1,5 @@
+Om mean = 0.356693
+Om sigma = 0.026347
+68% = [0.329963, 0.383466]
+95% = [0.305819, 0.408425]
+Run directory: outputs/validation_union3_lcdm/validation-union3-lcdm-20260718T022848Z

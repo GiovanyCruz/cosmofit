@@ -5,6 +5,7 @@ __pycache__/
 
 # Environments
 .venv/
+.venv312/
 venv/
 
 # Tests and tools
@@ -27,3 +28,15 @@ chains/
 .vscode/
 .idea/
 .DS_Store
+
+
+
+# Codex and local agent configuration
+.codex/
+AGENTS.md
+
+# Temporary plots and test artifacts
+.tmp-mpl/
+tmp-qt-check/
+tmp-results-controller-lifecycle/
+plot.pdf

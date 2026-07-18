@@ -6,7 +6,31 @@ build-backend = "setuptools.build_meta"
 name = "cosmofit"
 version = "0.1.0"
 description = "Desktop interface for cosmological background inference with Cobaya"
+readme = "README.md"
 requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Giovany Cruz Huérfano" },
+]
+keywords = [
+    "cosmology",
+    "Bayesian inference",
+    "MCMC",
+    "Cobaya",
+    "PySide6",
+    "scientific software",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
 dependencies = [
     "cobaya",
     "getdist",
@@ -26,6 +50,9 @@ dev = [
     "ruff",
     "pyinstaller",
 ]
+
+[project.scripts]
+cosmofit = "cosmofit.ui.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

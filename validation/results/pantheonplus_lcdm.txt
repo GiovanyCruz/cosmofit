@@ -1,0 +1,9 @@
+Om mean = 0.331611
+Om sigma = 0.018716
+68% = [0.313144, 0.350839]
+95% = [0.295995, 0.368465]
+Convergence means R-1 = 0.001646
+Convergence bounds R-1 = 0.032574
+Acceptance rate = 0.433
+Accepted samples = 1240
+Run directory: outputs/validation_pantheonplus_lcdm/validation-pantheonplus-lcdm-20260718T011511Z
