@@ -5,6 +5,7 @@ __pycache__/
 
 # Environments
 .venv/
+.venv312/
 venv/
 
 # Tests and tools
