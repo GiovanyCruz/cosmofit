@@ -1,0 +1,6 @@
+dataset,parameter,cosmofit_mean,cosmofit_sigma,reference_mean,reference_sigma,mean_relative_difference_percent,sigma_relative_difference_percent,normalized_mean_separation_sigma
+Cosmic Chronometers,H0,72.344391,1.102487,72.346278,1.036889,0.0026,6.1324,0.001247
+Cosmic Chronometers,Om,0.234969,0.015398,0.234712,0.014701,0.1098,4.6342,0.012072
+Pantheon+,Om,0.331611,0.018716,0.331896,0.017691,0.0861,5.6333,0.011086
+Pantheon+SH0ES,Om,0.341094,0.018651,0.338781,0.019783,0.6803,5.8869,0.085055
+Union3,Om,0.356693,0.026347,0.357296,0.027535,0.1690,4.4119,0.015829
