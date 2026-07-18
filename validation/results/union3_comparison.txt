@@ -1,0 +1,18 @@
+
+CosmoFit
+--------
+Om = 0.356693 +/- 0.026347
+68% = [0.329963, 0.383466]
+95% = [0.305819, 0.408425]
+
+Direct Cobaya
+-------------
+Om = 0.357296 +/- 0.027535
+68% = [0.329676, 0.384555]
+95% = [0.303248, 0.411359]
+
+Comparison
+----------
+Om mean relative difference: 0.1690%
+Om sigma relative difference: 4.4119%
+Normalized mean separation: 0.015829 sigma
