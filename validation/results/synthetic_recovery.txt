@@ -1,0 +1,3 @@
+H0: truth=70.000000, mean=71.061649, sigma=1.582522, 68%=[69.526532, 72.640599], 95%=[67.858860, 74.096396], in_68=True, in_95=True
+Om: truth=0.300000, mean=0.304632, sigma=0.023821, 68%=[0.280904, 0.327936], 95%=[0.259146, 0.353379], in_68=True, in_95=True
+Run directory: outputs/synthetic_recovery_cc_lcdm/synthetic-recovery-cc-lcdm-20260718T005405Z
