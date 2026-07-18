@@ -49,7 +49,7 @@ The recommended environment is Python 3.12 or newer.
 Clone the repository:
 
 ```bash
-git clone REPLACE_WITH_REPOSITORY_URL
+git clone https://github.com/GiovanyCruz/cosmofit.git
 cd cosmofit
 ```
 

@@ -20,7 +20,7 @@ Python 3.12 is recommended for the first scientific release.
 Clone the public CosmoFit repository:
 
 ```bash
-git clone REPLACE_WITH_REPOSITORY_URL
+git clone nano docs/installation.md
 cd cosmofit
 ```
 

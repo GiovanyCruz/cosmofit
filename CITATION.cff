@@ -28,8 +28,8 @@ keywords:
 
 license: MIT
 
-repository-code: "REPLACE_WITH_REPOSITORY_URL"
-url: "REPLACE_WITH_PROJECT_URL"
+repository-code: "https://github.com/GiovanyCruz/cosmofit"
+url: "https://github.com/GiovanyCruz/cosmofit"
 
 preferred-citation:
   type: article
