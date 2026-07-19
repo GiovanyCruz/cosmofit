@@ -44,7 +44,14 @@ The supernova datasets are accessed through the official Cobaya likelihood compo
 
 ## Installation
 
-The recommended environment is Python 3.12 or newer.
+CosmoFit is currently distributed through this source-code repository.
+
+To install and run CosmoFit, users need:
+
+* Git
+* Python 3.12
+
+Git is required to clone the repository. Python is required to create the virtual environment, install the dependencies, and run the graphical interface.
 
 Clone the repository:
 
