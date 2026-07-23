@@ -28,14 +28,14 @@ keywords:
 
 license: MIT
 
-repository-code: "https://github.com/GiovanyCruz/cosmofit"
-url: "https://github.com/GiovanyCruz/cosmofit"
 
 preferred-citation:
   type: article
-  title: "CosmoFit: A graphical interface for background cosmological inference with Cobaya"
+  title: "CosmoFit: A Graphical User Interface for Bayesian Cosmological Parameter Estimation with User-Defined H(z) Models"
   authors:
     - family-names: "Cruz Huérfano"
       given-names: "Giovany"
   year: 2026
-  journal: "Manuscript in preparation"
+  publisher: "Research Square"
+  doi: "10.21203/rs.3.rs-10437914/v1"
+  url: "https://doi.org/10.21203/rs.3.rs-10437914/v1"
