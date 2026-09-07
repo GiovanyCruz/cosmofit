@@ -40,3 +40,8 @@ AGENTS.md
 tmp-qt-check/
 tmp-results-controller-lifecycle/
 plot.pdf
+
+# Referee Comment 2 generated chains, summaries, and plots
+validation/referee2/outputs/
+validation/referee2/summaries/
+validation/referee2/plots/
