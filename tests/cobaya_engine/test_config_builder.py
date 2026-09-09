@@ -52,6 +52,12 @@ def test_generated_configuration_contains_no_pyside6_dependency() -> None:
     assert "PySide6" not in str(cobaya_input.info)
 
 
+def test_explicit_sampler_seed_is_propagated_to_native_cobaya_mcmc() -> None:
+    cobaya_input = build_cobaya_input(_run_config())
+
+    assert cobaya_input.info["sampler"]["mcmc"]["seed"] == 9
+
+
 def _run_config() -> RunConfig:
     return RunConfig(
         schema_version=1,

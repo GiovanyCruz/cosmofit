@@ -53,7 +53,7 @@ def main() -> int:
                 FIXED_DATASET,
                 paths["cosmofit"],
                 seed=seed,
-                label=f"referee2-seed-{seed}",
+                label=f"matched-cobaya-seed-{seed}",
             ),
             "direct_cobaya": run_direct_cobaya(
                 FIXED_DATASET, paths["direct_cobaya"], seed=seed

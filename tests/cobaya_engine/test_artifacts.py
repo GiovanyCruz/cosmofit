@@ -15,7 +15,10 @@ from cosmofit.application import (
     SamplerConfig,
     UniformPriorConfig,
 )
-from cosmofit.cobaya_engine.artifacts import prepare_run_artifacts
+from cosmofit.cobaya_engine.artifacts import (
+    prepare_run_artifacts,
+    write_metadata,
+)
 
 
 def test_prepare_run_artifacts_refuses_existing_directory_without_overwrite(
@@ -37,6 +40,15 @@ def test_prepare_run_artifacts_creates_expected_directories(tmp_path: Path) -> N
     assert artifacts.run_directory == run_directory
     assert artifacts.logs_directory.is_dir()
     assert artifacts.chains_directory.is_dir()
+
+
+def test_metadata_records_effective_native_cobaya_seed(tmp_path: Path) -> None:
+    artifacts = prepare_run_artifacts(_run_config(tmp_path / "seeded", overwrite=False))
+    config = _run_config(artifacts.run_directory, overwrite=False)
+
+    write_metadata(artifacts, config)
+
+    assert '"cobaya_sampler_seed": 7' in artifacts.metadata_path.read_text()
 
 
 def _run_config(run_directory: Path, *, overwrite: bool) -> RunConfig:

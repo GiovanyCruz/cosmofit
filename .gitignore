@@ -41,7 +41,11 @@ tmp-qt-check/
 tmp-results-controller-lifecycle/
 plot.pdf
 
-# Referee Comment 2 generated chains, summaries, and plots
-validation/referee2/outputs/
-validation/referee2/summaries/
-validation/referee2/plots/
+# Generated matched-Cobaya chains, summaries, and plots
+validation/matched_cobaya/outputs/
+validation/matched_cobaya/summaries/
+validation/matched_cobaya/plots/
+validation/matched_cobaya/summaries/
+validation/matched_cobaya/plots/
+validation/matched_cobaya/summaries/
+validation/matched_cobaya/plots/

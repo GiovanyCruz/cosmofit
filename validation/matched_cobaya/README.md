@@ -1,6 +1,6 @@
-# Referee Comment 2 validation workflow
+# Matched-Cobaya validation workflow
 
-This isolated workflow extends, and does not replace, the existing single-realization synthetic cosmic-chronometer (CC) recovery. It provides two complementary experiments requested by Referee Comment 2.
+This isolated workflow extends, and does not replace, the existing single-realization synthetic cosmic-chronometer (CC) recovery. It provides complementary synthetic and real-data validation experiments.
 
 ## Preserved baseline
 
@@ -14,6 +14,12 @@ The existing manuscript validation remains unchanged at `validation/data/cosmic_
 
 `run_mcmc_seed_comparison.py` fixes the original manuscript synthetic input dataset and runs both (A) the CosmoFit-generated Cobaya workflow and (B) a direct, independent Cobaya Gaussian CC likelihood for every seed. The canonical scientific configuration includes H(z), dataset checksum, diagonal covariance prescription, parameters, priors, references, proposal widths, MCMC controls, stopping thresholds, and package path. It is compared programmatically before sampling; a difference aborts the run and is saved in `configuration_comparison.json`.
 
+## Historical real-CC controlled comparison
+
+`run_comparison.py` is separate from both synthetic experiments. It fixes the historical 18-point real CC file at `data/cosmic_chronometers/cosmic_chronometers_18.csv` (SHA-256 `ed9d77b5f3b0ce368354eef886b654e639370dfe987c9cd8a971a093a8510869`) and uses the historical flat-LCDM, priors, references, proposals, burn-in, learned proposal, maximum samples, and convergence thresholds. Before every pair it compares dataset checksum, H(z), likelihood, parameters, sampler controls, and the native Cobaya seed. The pair is aborted on a scientific mismatch.
+
+This study records posterior means and weighted-covariance standard deviations with exactly `loadMCSamples(root, settings={"ignore_rows": 0.3})`, raw/retained rows, retained weights, accepted samples, ESS, R−1, status, and time. Its outputs live only under `outputs/real_cc_seed_repeatability/`; it never modifies historical outputs, synthetic recovery realizations, or synthetic seed comparisons.
+
 ## Diagnostics and interpretation
 
 Cobaya's checkpoint supplies `converged` and final `Rminus1_last`; convergence is governed by the unchanged thresholds R−1<0.01 and confidence-level R−1<0.05. GetDist’s `getEffectiveSamples(j)` is recorded separately for H0 and Om. This is a parameter-specific, autocorrelation-adjusted estimate relevant to the error on that parameter mean, not a single total ESS. Progress files provide accepted/total counts (where Cobaya exposes them) and acceptance rate. Failed or non-converged runs are retained in row summaries but excluded from successful aggregate recovery statistics.
@@ -25,17 +31,19 @@ Coverage fractions are measured descriptive fractions, never claims of exact nom
 From the activated project environment:
 
 ```bash
-python validation/referee2/run_realizations.py --smoke
-python validation/referee2/run_mcmc_seed_comparison.py --smoke
-python validation/referee2/summarize.py
+python validation/matched_cobaya/run_realizations.py --smoke
+python validation/matched_cobaya/run_mcmc_seed_comparison.py --smoke
+python validation/matched_cobaya/run_comparison.py --smoke
+python validation/matched_cobaya/summarize.py
 ```
 
 Production commands (not launched automatically):
 
 ```bash
-python validation/referee2/run_realizations.py --n-realizations 20
-python validation/referee2/run_mcmc_seed_comparison.py --n-seeds 5
-python validation/referee2/summarize.py
+python validation/matched_cobaya/run_realizations.py --n-realizations 20
+python validation/matched_cobaya/run_mcmc_seed_comparison.py --n-seeds 5
+python validation/matched_cobaya/run_comparison.py --n-seeds 5
+python validation/matched_cobaya/summarize.py
 ```
 
-Outputs are under `validation/referee2/outputs/`; row-level CSV/JSON tables and the report are under `validation/referee2/summaries/`; Matplotlib PNG/PDF figures are under `validation/referee2/plots/`. Every run records environment versions, UTC date, seed, dataset checksum, covariance status, configuration, and output directory. Large chains and caches are ignored by Git.
+Outputs are under `validation/matched_cobaya/outputs/`; row-level CSV/JSON tables and the report are under `validation/matched_cobaya/summaries/`; Matplotlib PNG/PDF figures are under `validation/matched_cobaya/plots/`. Every run records environment versions, UTC date, seed, dataset checksum, covariance status, configuration, and output directory. Large chains and caches are ignored by Git.

@@ -1,4 +1,4 @@
-"""Reusable, isolated machinery for the Referee Comment 2 experiments.
+"""Reusable machinery for controlled CosmoFit/direct-Cobaya validation.
 
 This module deliberately reuses CosmoFit's public RunConfig and subprocess
 runner.  The direct path is intentionally small and independent: it evaluates
@@ -45,6 +45,12 @@ SUMMARIES = ROOT / "summaries"
 PLOTS = ROOT / "plots"
 FIXED_DATASET = (
     ROOT.parent / "data" / "cosmic_chronometers_synthetic_recovery_input.csv"
+)
+REAL_CC_DATASET = (
+    ROOT.parents[1] / "data" / "cosmic_chronometers" / "cosmic_chronometers_18.csv"
+)
+REAL_CC_DATASET_SHA256 = (
+    "ed9d77b5f3b0ce368354eef886b654e639370dfe987c9cd8a971a093a8510869"
 )
 EXPRESSION = "H0*sqrt(Om*(1+z)**3 + 1-Om)"
 H0_FIDUCIAL = 70.0
@@ -157,7 +163,12 @@ def generate_dataset(destination: Path, *, seed: int) -> Path:
 
 
 def build_run_config(
-    dataset_path: Path, run_directory: Path, *, seed: int, label: str
+    dataset_path: Path,
+    run_directory: Path,
+    *,
+    seed: int,
+    label: str,
+    dataset_name: str = "synthetic-recovery-cc",
 ) -> RunConfig:
     """Build exactly the existing synthetic-recovery scientific configuration."""
 
@@ -189,7 +200,7 @@ def build_run_config(
         ),
         datasets=(
             CosmicChronometerDatasetConfig(
-                "cosmic_chronometers", dataset_path, "synthetic-recovery-cc"
+                "cosmic_chronometers", dataset_path, dataset_name
             ),
         ),
         sampler=SamplerConfig(
@@ -207,7 +218,9 @@ def build_run_config(
     )
 
 
-def canonical_science_config(dataset_path: Path) -> dict[str, Any]:
+def canonical_science_config(
+    dataset_path: Path, *, native_cobaya_seed: int | None = None
+) -> dict[str, Any]:
     """Science-only payload excluding paths, seeds, and implementation wrappers."""
 
     config = build_run_config(dataset_path, Path("not-used"), seed=0, label="not-used")
@@ -237,6 +250,7 @@ def canonical_science_config(dataset_path: Path) -> dict[str, Any]:
             "learn_proposal": config.sampler.learn_proposal,
             "Rminus1_stop": config.sampler.Rminus1_stop,
             "Rminus1_cl_stop": config.sampler.Rminus1_cl_stop,
+            "native_cobaya_seed": native_cobaya_seed,
         },
         "packages_path": None,
     }
@@ -366,7 +380,12 @@ def run_direct_cobaya(dataset_path: Path, run_directory: Path, *, seed: int) -> 
 
 
 def run_cosmofit(
-    dataset_path: Path, run_directory: Path, *, seed: int, label: str
+    dataset_path: Path,
+    run_directory: Path,
+    *,
+    seed: int,
+    label: str,
+    dataset_name: str = "synthetic-recovery-cc",
 ) -> int:
     """Run the unchanged CosmoFit execution backend exactly once."""
 
@@ -376,14 +395,20 @@ def run_cosmofit(
         raise FileExistsError(
             f"Refusing to reuse incomplete CosmoFit run: {run_directory}"
         )
-    config = build_run_config(dataset_path, run_directory, seed=seed, label=label)
+    config = build_run_config(
+        dataset_path,
+        run_directory,
+        seed=seed,
+        label=label,
+        dataset_name=dataset_name,
+    )
     started = time.monotonic()
     result = run_in_subprocess(config)
     metadata = environment_metadata(
         seed=seed, dataset_path=dataset_path, output_directory=run_directory
     )
-    metadata["wall_seconds_referee2"] = time.monotonic() - started
-    _write_json(run_directory / "referee2_metadata.json", metadata)
+    metadata["wall_seconds_validation"] = time.monotonic() - started
+    _write_json(run_directory / "validation_metadata.json", metadata)
     _write_json(
         run_directory / "science_config.json", canonical_science_config(dataset_path)
     )
@@ -402,7 +427,7 @@ def run_is_successful(run_directory: Path) -> bool:
         return False
 
 
-def analyze_run(run_directory: Path) -> dict[str, Any]:
+def analyze_run(run_directory: Path, *, ignore_rows: float = 0.0) -> dict[str, Any]:
     """Use GetDist posterior summaries and Cobaya checkpoint/progress diagnostics."""
 
     root = run_directory / "chains" / "chain"
@@ -410,7 +435,7 @@ def analyze_run(run_directory: Path) -> dict[str, Any]:
     samples = loadMCSamples(
         str(root),
         no_cache=True,
-        settings={"ignore_rows": 0.0, "contours": [0.68, 0.95]},
+        settings={"ignore_rows": ignore_rows, "contours": [0.68, 0.95]},
     )
     stats = samples.getMargeStats()
     results: dict[str, ParameterResult] = {}
@@ -447,6 +472,10 @@ def analyze_run(run_directory: Path) -> dict[str, Any]:
         # total proposal count is not exposed in this artifact format.
         "accepted_sample_count": _last_progress(progress, "N"),
         "total_sample_count": None,
+        "raw_chain_rows": _raw_chain_rows(root.with_suffix(".1.txt")),
+        "retained_rows": int(samples.samples.shape[0]),
+        "retained_total_weight": float(np.sum(samples.weights)),
+        "analysis_ignore_rows": ignore_rows,
         "acceptance_rate": _last_progress(progress, "acceptance_rate"),
         "wall_seconds": _wall_seconds(run_directory),
         "H0": asdict(results["H0"]),
@@ -504,6 +533,10 @@ def flatten_result(
                 "effective_sample_size_Om",
                 "accepted_sample_count",
                 "total_sample_count",
+                "raw_chain_rows",
+                "retained_rows",
+                "retained_total_weight",
+                "analysis_ignore_rows",
                 "acceptance_rate",
                 "wall_seconds",
                 "run_directory",
@@ -593,6 +626,7 @@ def aggregate_seed_workflows(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "standard_deviation": _std_or_none(np.array(differences)),
             "minimum": float(np.min(differences)) if differences else None,
             "maximum": float(np.max(differences)) if differences else None,
+            "median": float(np.median(differences)) if differences else None,
         }
     return output
 
@@ -653,6 +687,15 @@ def _read_progress(path: Path) -> pd.DataFrame:
     )
 
 
+def _raw_chain_rows(path: Path) -> int:
+    """Count saved chain rows before the GetDist row-removal rule."""
+
+    if not path.is_file():
+        return 0
+    with path.open(encoding="utf-8") as handle:
+        return sum(1 for line in handle if line.strip() and not line.startswith("#"))
+
+
 def _last_progress(frame: pd.DataFrame, field: str) -> float | int | None:
     if frame.empty or field not in frame:
         return None
@@ -664,10 +707,10 @@ def _wall_seconds(run_directory: Path) -> float | None:
     status = _load_json(run_directory / "status.json")
     if "wall_seconds" in status:
         return float(status["wall_seconds"])
-    metadata = _load_json(run_directory / "referee2_metadata.json")
+    metadata = _load_json(run_directory / "validation_metadata.json")
     return (
-        float(metadata["wall_seconds_referee2"])
-        if "wall_seconds_referee2" in metadata
+        float(metadata["wall_seconds_validation"])
+        if "wall_seconds_validation" in metadata
         else None
     )
 

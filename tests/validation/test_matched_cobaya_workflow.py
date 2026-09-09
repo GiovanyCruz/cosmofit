@@ -1,4 +1,4 @@
-"""Focused, no-MCMC tests for the Referee Comment 2 workflow."""
+"""Focused, no-MCMC tests for the matched-Cobaya workflow."""
 
 from __future__ import annotations
 
@@ -10,13 +10,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-REFEREE2 = Path(__file__).resolve().parents[2] / "validation" / "referee2"
-sys.path.insert(0, str(REFEREE2))
+MATCHED_COBAYA = Path(__file__).resolve().parents[2] / "validation" / "matched_cobaya"
+sys.path.insert(0, str(MATCHED_COBAYA))
 
+from run_comparison import RESULTS_CSV, _paired_statistics  # noqa: E402
 from workflow import (  # noqa: E402
     FIXED_DATASET,
+    OUTPUTS,
+    REAL_CC_DATASET,
+    REAL_CC_DATASET_SHA256,
     aggregate_realizations,
     canonical_science_config,
+    checksum,
     compare_science_configs,
     coverage,
     generate_dataset,
@@ -122,3 +127,34 @@ def test_seed_metadata_is_preserved(tmp_path: Path) -> None:
         generate_dataset(tmp_path / "again.csv", seed=99).read_bytes()
         == path.read_bytes()
     )
+
+
+def test_real_cc_dataset_checksum_matches_historical_artifact() -> None:
+    assert checksum(REAL_CC_DATASET) == REAL_CC_DATASET_SHA256
+
+
+def test_real_cc_paired_statistics_use_direct_cobaya_denominator() -> None:
+    statistics = _paired_statistics(
+        [
+            {"delta_sigma_H0_percent": 2.0, "delta_sigma_Om_percent": 3.0},
+            {"delta_sigma_H0_percent": 4.0, "delta_sigma_Om_percent": 5.0},
+        ]
+    )
+
+    assert statistics["H0"]["mean"] == 3.0
+    assert statistics["H0"]["median"] == 3.0
+    assert statistics["Om"]["minimum"] == 3.0
+
+
+def test_real_cc_compact_results_are_stored_in_the_public_results_directory() -> None:
+    assert RESULTS_CSV == Path("validation/results/real_cc_ess_pairs.csv").resolve()
+
+
+def test_real_cc_study_does_not_share_synthetic_output_tree() -> None:
+    assert OUTPUTS / "real_cc_seed_repeatability" != OUTPUTS / "seed_repeatability"
+
+
+def test_historical_real_cc_chain_is_not_in_the_new_output_tree() -> None:
+    historical = Path("outputs/direct_cobaya_cc_lcdm/chain.1.txt")
+    assert historical.is_file()
+    assert "validation/matched_cobaya" not in str(historical)

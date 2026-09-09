@@ -144,6 +144,7 @@ def write_metadata(artifacts: RunArtifacts, run_config: RunConfig) -> None:
         "numpy_version": np.__version__,
         "python_version": platform.python_version(),
         "platform": platform.platform(),
+        "cobaya_sampler_seed": run_config.sampler.seed,
     }
     supernova_datasets = [
         dataset.kind

@@ -102,6 +102,10 @@ def build_cobaya_input(run_config: RunConfig) -> CobayaInput:
     sampler_options: dict[str, Any] = {
         "learn_proposal": run_config.sampler.learn_proposal,
     }
+    # Cobaya's native MCMC seed. Keeping this in the executable input is
+    # essential: worker-level random seeding alone is not an artifact-level
+    # guarantee of the sampler stream.
+    sampler_options["seed"] = run_config.sampler.seed
     if run_config.sampler.max_samples is not None:
         sampler_options["max_samples"] = run_config.sampler.max_samples
     if run_config.sampler.burn_in is not None:

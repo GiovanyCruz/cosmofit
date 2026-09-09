@@ -37,7 +37,7 @@ def main() -> int:
             dataset,
             directory / "cosmofit",
             seed=seed,
-            label=f"referee2-realization-{number:03d}",
+            label=f"matched-cobaya-realization-{number:03d}",
         )
         if code == 0:
             rows.append(

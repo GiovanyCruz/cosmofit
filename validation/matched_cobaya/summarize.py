@@ -1,4 +1,4 @@
-"""Build descriptive tables, plots, and a concise referee-facing report."""
+"""Build descriptive tables, plots, and a concise validation report."""
 
 from __future__ import annotations
 
@@ -44,10 +44,10 @@ def main() -> int:
         "plots_directory": str(PLOTS),
         "outputs_directory": str(OUTPUTS),
     }
-    path = SUMMARIES / "referee2_report.json"
+    path = SUMMARIES / "validation_report.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    _write_markdown(report, SUMMARIES / "referee2_report.md")
+    _write_markdown(report, SUMMARIES / "validation_report.md")
     print(path)
     return 0
 
@@ -133,7 +133,7 @@ def _interpretation(rows: list[dict[str, Any]]) -> str:
 def _write_markdown(report: dict[str, Any], path: Path) -> None:
     realization = report["realization_aggregate"]
     lines = [
-        "# Referee Comment 2: machine-produced smoke/production report",
+        "# Matched-Cobaya validation report",
         "",
         (
             "This report is descriptive. Non-converged runs are excluded from "
