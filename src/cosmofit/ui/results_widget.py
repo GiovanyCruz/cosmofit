@@ -796,6 +796,9 @@ class ResultsWidget(QWidget):
         self._populate_parameter_table(loaded)
         self._clear_plot()
         self._apply_results_enabled(True)
+        self.status_message_label.setText(
+            _convergence_status_message(loaded.summary.diagnostics.converged)
+        )
 
     def _handle_plot_ready(self, payload: object) -> None:
         plot = payload
@@ -878,6 +881,7 @@ class ResultsWidget(QWidget):
 
     def _populate_summary(self, loaded: LoadedPosteriorResults) -> None:
         summary = loaded.summary
+        diagnostics = summary.diagnostics
         fixed_values = ", ".join(
             f"{item.symbol}={item.value:g}" for item in summary.fixed_parameters
         ) or "none"
@@ -888,9 +892,15 @@ class ResultsWidget(QWidget):
                     f"Run directory: {loaded.run_analysis.run_directory}",
                     "Datasets: " + ", ".join(loaded.run_analysis.datasets),
                     f"Chain root: {summary.chain_root}",
-                    f"Sample rows: {summary.diagnostics.sample_rows}",
-                    f"Chain count: {summary.diagnostics.chain_count}",
-                    f"Ignore initial fraction: {summary.settings.ignore_rows}",
+                    f"Sample rows: {diagnostics.sample_rows}",
+                    f"Chain count: {diagnostics.chain_count}",
+                    "Convergence status: "
+                    + _convergence_status_label(diagnostics.converged),
+                    f"Last Cobaya R-1: {_format_float(diagnostics.rminus1_last)}",
+                    "Sampler burn-in from Cobaya checkpoint: "
+                    + _format_float(diagnostics.checkpoint_burn_in),
+                    "Current GetDist ignore_rows value: "
+                    f"{summary.settings.ignore_rows}",
                 ]
             )
         )
@@ -1074,3 +1084,27 @@ def _format_float(value: float | None) -> str:
     if value is None:
         return "n/a"
     return f"{value:.6g}"
+
+
+def _convergence_status_label(converged: bool | None) -> str:
+    if converged is True:
+        return "satisfied"
+    if converged is False:
+        return "NOT satisfied"
+    return "unknown"
+
+
+def _convergence_status_message(converged: bool | None) -> str:
+    if converged is True:
+        return "Cobaya convergence criterion was satisfied."
+    if converged is False:
+        return (
+            "Warning: Cobaya convergence criterion was NOT satisfied. "
+            "Posterior results may be inspected for diagnostic purposes but "
+            "should not be interpreted as final constraints."
+        )
+    return (
+        "Warning: Cobaya convergence status is unavailable. Posterior results "
+        "should not be interpreted as final constraints until convergence has "
+        "been verified."
+    )
