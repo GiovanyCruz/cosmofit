@@ -1,0 +1,23 @@
+{
+  "included_realizations": 20,
+  "excluded_realizations": 0,
+  "interpretation": "Measured fractions are descriptive; they are not asserted to equal nominal coverage for this finite experiment.",
+  "H0": {
+    "mean_recovered": 69.65872847626416,
+    "standard_deviation_of_means": 1.5068967459507678,
+    "mean_posterior_sigma": 1.5477514499616158,
+    "mean_pull": -0.215015216461199,
+    "standard_deviation_of_pulls": 0.9625007364519081,
+    "coverage_fraction_68": 0.75,
+    "coverage_fraction_95": 0.9
+  },
+  "Om": {
+    "mean_recovered": 0.30746162043343983,
+    "standard_deviation_of_means": 0.02435579016404622,
+    "mean_posterior_sigma": 0.024394278496842624,
+    "mean_pull": 0.23325701730321263,
+    "standard_deviation_of_pulls": 0.983946704883826,
+    "coverage_fraction_68": 0.75,
+    "coverage_fraction_95": 0.95
+  }
+}
